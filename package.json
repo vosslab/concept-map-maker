@@ -1,0 +1,39 @@
+{
+  "name": "concept-map-maker",
+  "version": "26.6.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "setup": "./devel/setup_typescript.sh",
+    "setup:playwright": "./devel/setup_playwright.sh",
+    "build": "./build_github_pages.sh",
+    "serve": "./run_web_server.sh",
+    "check": "./check_codebase.sh",
+    "clean": "./dist_clean.sh",
+    "format:write": "npx prettier --write '**/*.{ts,tsx,mts,cts,js,mjs,cjs}'",
+    "test:playwright": "playwright test",
+    "pdf": "node tools/html_to_pdf.mjs"
+  },
+  "dependencies": {
+    "solid-js": ">=1.9.5",
+    "@dagrejs/dagre": ">=1.1.4"
+  },
+  "devDependencies": {
+    "@types/node": ">=25.9.1",
+    "esbuild": ">=0.24.0",
+    "esbuild-plugin-solid": ">=0.1.1",
+    "@babel/core": ">=7.26.0",
+    "babel-preset-solid": ">=1.9.5",
+    "@babel/preset-typescript": ">=7.26.0",
+    "typescript": ">=6.0.3",
+    "eslint": ">=10.4.0",
+    "@eslint/js": ">=10.0.1",
+    "typescript-eslint": ">=8.60.0",
+    "eslint-plugin-solid": ">=0.14.5",
+    "globals": ">=17.6.0",
+    "playwright": ">=1.60.0",
+    "prettier": ">=3.8.3",
+    "tsx": ">=4.22.3",
+    "@playwright/test": ">=1.60.0"
+  }
+}
