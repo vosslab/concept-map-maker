@@ -5,6 +5,8 @@ _temp*.?*
 # === LOCAL ===
 # Template-only ignores.
 package-lock.json
+node_modules/
+tests/fixtures/
 # === PYTHON ===
 build/
 dist/
