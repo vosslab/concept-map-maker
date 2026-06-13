@@ -16,7 +16,6 @@ function make_doc(overrides = {}) {
     version: 1,
     title: "Test map",
     triples: [],
-    definitions: [],
     overrides: {},
     theme: { shape: "rounded", palette: "earth" },
     ...overrides,
@@ -30,12 +29,6 @@ function triple(from, verb, to, id = null) {
   return { id: id ?? `t${_id_counter}`, from, verb, to };
 }
 
-/** Make a definition with a generated id. */
-function def(word, definition) {
-  _id_counter++;
-  return { id: `d${_id_counter}`, word, definition };
-}
-
 /** Build 30+ distinct triples that form a linear chain of concepts. */
 function make_30_concept_triples() {
   const triples = [];
@@ -43,15 +36,6 @@ function make_30_concept_triples() {
     triples.push(triple(`concept ${i}`, "relates to", `concept ${i + 1}`));
   }
   return triples;
-}
-
-/** Build 10 non-empty definitions. */
-function make_10_definitions() {
-  const defs = [];
-  for (let i = 0; i < 10; i++) {
-    defs.push(def(`word${i}`, `definition of word${i}`));
-  }
-  return defs;
 }
 
 /** Find the first ValidationItem with a given rule name from the result list. */
@@ -126,36 +110,6 @@ test("verbs_required: blank rows are ignored", () => {
   });
   const items = validate_document(doc);
   const item = find_rule(items, "verbs_required");
-  assert.equal(item.level, "pass");
-});
-
-//============================================
-// min_10_definitions rule
-//============================================
-
-test("min_10_definitions: fail when fewer than 10 filled definitions", () => {
-  const doc = make_doc({
-    definitions: [def("alpha", "first letter")],
-  });
-  const items = validate_document(doc);
-  const item = find_rule(items, "min_10_definitions");
-  assert.equal(item.level, "fail");
-});
-
-test("min_10_definitions: pass when 10 or more filled definitions present", () => {
-  const doc = make_doc({ definitions: make_10_definitions() });
-  const items = validate_document(doc);
-  const item = find_rule(items, "min_10_definitions");
-  assert.equal(item.level, "pass");
-});
-
-test("min_10_definitions: empty-word entries are not counted", () => {
-  const defs = make_10_definitions();
-  // Add one blank definition; total filled still 10 so should still pass
-  defs.push(def("", ""));
-  const doc = make_doc({ definitions: defs });
-  const items = validate_document(doc);
-  const item = find_rule(items, "min_10_definitions");
   assert.equal(item.level, "pass");
 });
 
@@ -317,64 +271,4 @@ test("near_miss_spelling: warn when two keys differ by 1 insertion", () => {
   const items = validate_document(doc);
   const item = find_rule(items, "near_miss_spelling");
   assert.equal(item.level, "warn");
-});
-
-//============================================
-// defined_word_absent hint
-//============================================
-
-test("defined_word_absent: no hint when defined word appears in a concept label", () => {
-  const doc = make_doc({
-    triples: [triple("photosynthesis", "converts", "light")],
-    definitions: [def("photosynthesis", "process in plants")],
-  });
-  const items = validate_document(doc);
-  const hints = items.filter((it) => it.rule === "defined_word_absent");
-  assert.equal(hints.length, 0);
-});
-
-test("defined_word_absent: hint when defined word appears nowhere in map text", () => {
-  const doc = make_doc({
-    triples: [triple("A", "links", "B")],
-    definitions: [def("mitosis", "cell division process")],
-  });
-  const items = validate_document(doc);
-  const hints = items.filter((it) => it.rule === "defined_word_absent");
-  assert.ok(hints.length > 0);
-  assert.equal(hints[0].level, "hint");
-});
-
-test("defined_word_absent: hint is case-insensitive substring match", () => {
-  // "Mitosis" appears in concept "Mitosis stage" — should match "mitosis" definition
-  const doc = make_doc({
-    triples: [triple("Mitosis stage", "precedes", "telophase")],
-    definitions: [def("mitosis", "cell division")],
-  });
-  const items = validate_document(doc);
-  const hints = items.filter((it) => it.rule === "defined_word_absent");
-  assert.equal(hints.length, 0);
-});
-
-test("defined_word_absent: hint also matches substring in verb phrase", () => {
-  // "catalyze" appears in a verb phrase
-  const doc = make_doc({
-    triples: [triple("enzyme", "can catalyze", "reaction")],
-    definitions: [def("catalyze", "speed up a chemical reaction")],
-  });
-  const items = validate_document(doc);
-  const hints = items.filter((it) => it.rule === "defined_word_absent");
-  assert.equal(hints.length, 0);
-});
-
-test("defined_word_absent: level is hint not warn or fail", () => {
-  const doc = make_doc({
-    triples: [triple("A", "links", "B")],
-    definitions: [def("xylem", "water-conducting tissue")],
-  });
-  const items = validate_document(doc);
-  const hints = items.filter((it) => it.rule === "defined_word_absent");
-  assert.ok(hints.length > 0);
-  for (const h of hints) {
-    assert.equal(h.level, "hint");
-  }
 });

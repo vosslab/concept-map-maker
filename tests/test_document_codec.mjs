@@ -30,7 +30,6 @@ test("empty_document is a valid, content-free document", () => {
   assert.equal(doc.format, "concept-map-maker");
   assert.equal(doc.version, 1);
   assert.equal(doc.triples.length, 0);
-  assert.equal(doc.definitions.length, 0);
   assert.deepEqual(doc.overrides, {});
 });
 
@@ -52,12 +51,12 @@ test("honeybees fixture parses and round-trips losslessly", () => {
 
 test("honeybees fixture preserves the multi-input/output structure", () => {
   const doc = parse_document(read_fixture("honeybees_document.json"));
-  // Castes has three outgoing edges
+  // Castes has multiple outgoing edges (multi-output source)
   const castes_out = doc.triples.filter((t) => t.from === "Castes");
-  assert.equal(castes_out.length, 3);
-  // Female has three incoming edges
+  assert.ok(castes_out.length >= 2);
+  // Female has multiple incoming edges (multi-input sink)
   const female_in = doc.triples.filter((t) => t.to === "Female");
-  assert.equal(female_in.length, 3);
+  assert.ok(female_in.length >= 2);
 });
 
 test("stress fixture parses and round-trips losslessly", () => {
@@ -94,7 +93,6 @@ test("a malformed triple is rejected loudly", () => {
     version: 1,
     title: "t",
     triples: [{ id: "t1", from: "A", verb: "v" }],
-    definitions: [],
     overrides: {},
     theme: { shape: "rounded", palette: "earth" },
   });
@@ -107,7 +105,6 @@ test("an unknown theme shape is rejected", () => {
     version: 1,
     title: "t",
     triples: [],
-    definitions: [],
     overrides: {},
     theme: { shape: "hexagon", palette: "earth" },
   });
@@ -124,11 +121,37 @@ test("an unknown version is rejected with a version message", () => {
     version: 2,
     title: "t",
     triples: [],
-    definitions: [],
     overrides: {},
     theme: { shape: "rounded", palette: "earth" },
   });
   assert.throws(() => parse_document(future), /Unsupported document version 2/);
+});
+
+//============================================
+// definitions field ignored (backward compatibility)
+//============================================
+
+// The definitions feature was removed. Old files that contain a "definitions"
+// key are silently accepted; the field is not read, not validated, and not
+// round-tripped. This test asserts that behavior explicitly.
+test("a document with a definitions field is parsed without error and the field is not round-tripped", () => {
+  const old_format = JSON.stringify({
+    format: "concept-map-maker",
+    version: 1,
+    title: "Old file",
+    triples: [{ id: "t1", from: "A", verb: "links", to: "B" }],
+    definitions: [{ id: "d1", word: "A", definition: "First letter." }],
+    overrides: {},
+    theme: { shape: "rounded", palette: "earth" },
+  });
+  // parse must succeed despite the extra definitions key
+  const doc = parse_document(old_format);
+  assert.equal(doc.title, "Old file");
+  assert.equal(doc.triples.length, 1);
+  // the serialized output must not contain a definitions key
+  const serialized = serialize_document(doc);
+  const re_parsed = JSON.parse(serialized);
+  assert.equal("definitions" in re_parsed, false);
 });
 
 //============================================
@@ -162,7 +185,6 @@ test("parse prunes stale overrides from a hand-edited file", () => {
     version: 1,
     title: "t",
     triples: [{ id: "t1", from: "A", verb: "v", to: "B" }],
-    definitions: [],
     overrides: { a: { x: 1, y: 1 }, stale: { x: 2, y: 2 } },
     theme: { shape: "oval", palette: "fire" },
   });

@@ -17,7 +17,7 @@ import type { JSX } from "solid-js";
 import { Show } from "solid-js";
 
 import type { AppState } from "./app_state";
-import type { Triple } from "./types";
+import type { Triple, ThemeShape } from "./types";
 import { concept_key } from "./types";
 import type { NodeBox, EdgeGeometry } from "./edge_geometry";
 import { edge_path, self_loop_path } from "./edge_geometry";
@@ -68,7 +68,7 @@ export interface ConceptEdgeProps {
 // uses edge_path with the assigned curvature.
 export function ConceptEdge(props: ConceptEdgeProps): JSX.Element {
   // map-wide bubble shape drives boundary clipping in the geometry helpers
-  const shape = (): "rounded" | "rect" | "oval" => props.state.doc.theme.shape;
+  const shape = (): ThemeShape => props.state.doc.theme.shape;
 
   // a self-loop when both endpoints share one normalized concept key
   const is_self_loop = (): boolean =>

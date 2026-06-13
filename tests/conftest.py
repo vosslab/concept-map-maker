@@ -31,4 +31,8 @@ collect_ignore = ["e2e", "playwright"]
 #       "ascii_compliance": ["human_readable-*.html"],
 #       "pyflakes_code_lint": ["devel/scratch_*.py"],
 #   }
-REPO_HYGIENE_FILTERS = {}
+REPO_HYGIENE_FILTERS = {
+	# vendor/ holds third-party binary and minified assets (Font Awesome woff2 + CSS).
+	# These files are not ASCII-clean Python and must be excluded from all hygiene scans.
+	"all": ["vendor/**"],
+}

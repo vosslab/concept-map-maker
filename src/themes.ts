@@ -64,18 +64,22 @@ export const ORIGIN_EMPHASIS: { stroke_width: number; stroke: string } = {
 //============================================
 // Per-shape rendering parameters consumed by the SVG node renderer.
 //
-// corner_radius: border-radius for rect/rounded (0 = sharp rect).
+// corner_radius: border-radius for rect/rounded (0 = sharp rect, ignored for capsule/ellipse).
 // is_ellipse: when true, render as <ellipse> rather than <rect>.
+// is_capsule: when true, render as a rect with rx = ry = height / 2 (stadium shape).
 export interface ShapeSpec {
   corner_radius: number;
   is_ellipse: boolean;
+  is_capsule: boolean;
 }
 
 export const SHAPE_REGISTRY: Record<ThemeShape, ShapeSpec> = {
-  // pill-like rounded rectangle
-  rounded: { corner_radius: 18, is_ellipse: false },
+  // classic rounded rectangle (modest corners, clearly distinct from capsule)
+  rounded: { corner_radius: 8, is_ellipse: false, is_capsule: false },
   // sharp rectangle
-  rect: { corner_radius: 0, is_ellipse: false },
+  rect: { corner_radius: 0, is_ellipse: false, is_capsule: false },
   // ellipse / oval rendered as SVG <ellipse>
-  oval: { corner_radius: 0, is_ellipse: true },
+  oval: { corner_radius: 0, is_ellipse: true, is_capsule: false },
+  // capsule: rect with fully rounded short ends (rx = ry = height / 2)
+  capsule: { corner_radius: 0, is_ellipse: false, is_capsule: true },
 };

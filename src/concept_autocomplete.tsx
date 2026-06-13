@@ -5,8 +5,14 @@
 // Committing a value whose concept_key matches an existing concept snaps to
 // that concept's canonical label (first-seen casing) and shows a transient hint.
 // Free text is always allowed - unmatched text commits as-is.
+//
+// expose_commit: optional prop - when provided, called once on mount with the
+// synchronous commit function. Callers can store that function and invoke it to
+// commit any typed draft before the 150 ms blur timer fires. The blur timer is
+// cancelled automatically when commit() is called synchronously, so calling
+// expose_commit's fn and later receiving the blur callback is safe (idempotent).
 
-import { createSignal, createMemo, Show, For, onCleanup } from "solid-js";
+import { createSignal, createMemo, Show, For, onCleanup, onMount } from "solid-js";
 import type { JSX } from "solid-js";
 import type { Concept } from "./derive_concepts.js";
 import { concept_key } from "./types.js";
@@ -34,6 +40,16 @@ export interface ConceptAutocompleteProps {
   // Optional CSS custom-property value for tinting the input background,
   // e.g. "var(--from-tint)". Applied as inline style on the wrapper.
   tint_var?: string;
+  // Optional: called once on mount with this cell's synchronous commit
+  // function. Callers can invoke it before the 150 ms blur timer fires.
+  expose_commit?: (fn: () => void) => void;
+  // Optional: called on every input event with the current draft text so
+  // the parent can track whether the field has uncommitted content.
+  on_draft_change?: (text: string) => void;
+  // Optional native title (tooltip) for the input. The triples table passes the
+  // committed value so a cell clipped by the column's clamped width still exposes its
+  // full text on hover.
+  title?: string;
 }
 
 //============================================
@@ -52,11 +68,17 @@ export function ConceptAutocomplete(props: ConceptAutocompleteProps): JSX.Elemen
 
   // Timer handle for auto-hiding the hint.
   let hint_timer: ReturnType<typeof setTimeout> | null = null;
+  // Pending blur-commit timer handle. Cancelled when commit() fires synchronously
+  // so the delayed blur callback does not double-apply the same value.
+  let blur_timer: ReturnType<typeof setTimeout> | null = null;
 
-  // Clean up the hint timer when the component unmounts.
+  // Clean up timers when the component unmounts.
   onCleanup(() => {
     if (hint_timer !== null) {
       clearTimeout(hint_timer);
+    }
+    if (blur_timer !== null) {
+      clearTimeout(blur_timer);
     }
   });
 
@@ -100,7 +122,14 @@ export function ConceptAutocomplete(props: ConceptAutocompleteProps): JSX.Elemen
   //============================================
   // Commit a value: if the normalized key matches an existing concept, snap to
   // canonical casing and show the hint. Always calls on_commit.
+  // Cancels any pending blur timer so a prior handle_blur scheduled call does
+  // not re-fire after this synchronous commit (double-commit guard).
   function commit(text: string): void {
+    // Cancel any pending blur-commit timer - this call supersedes it.
+    if (blur_timer !== null) {
+      clearTimeout(blur_timer);
+      blur_timer = null;
+    }
     const key = concept_key(text);
     // search for an exact key match among known concepts
     const existing = props.concepts().find((c) => c.key === key);
@@ -116,6 +145,24 @@ export function ConceptAutocomplete(props: ConceptAutocompleteProps): JSX.Elemen
   }
 
   //============================================
+  // commit_draft
+  //============================================
+  // Zero-argument wrapper that commits the current draft value.
+  // Exposed to parent via expose_commit prop so the parent can call it
+  // synchronously (e.g. before inserting a new row) without holding a
+  // reference to draft() directly.
+  function commit_draft(): void {
+    commit(draft());
+  }
+
+  // Expose commit_draft to the parent when requested.
+  onMount(() => {
+    if (props.expose_commit !== undefined) {
+      props.expose_commit(commit_draft);
+    }
+  });
+
+  //============================================
   // handle_input
   //============================================
   // Update draft and open the dropdown as the user types.
@@ -125,6 +172,10 @@ export function ConceptAutocomplete(props: ConceptAutocompleteProps): JSX.Elemen
     set_highlight_index(-1);
     // open only when there is text
     set_open(value.trim().length > 0);
+    // notify parent of draft change so it can react without waiting for commit
+    if (props.on_draft_change !== undefined) {
+      props.on_draft_change(value);
+    }
   }
 
   //============================================
@@ -182,8 +233,11 @@ export function ConceptAutocomplete(props: ConceptAutocompleteProps): JSX.Elemen
   //============================================
   // Commit typed text on blur (user clicked away or tabbed out without
   // pressing Enter). The slight delay lets a suggestion click fire first.
+  // Stores the timer handle so commit() can cancel it if called synchronously
+  // before the 150 ms elapses (double-commit guard).
   function handle_blur(): void {
-    setTimeout(() => {
+    blur_timer = setTimeout(() => {
+      blur_timer = null;
       commit(draft());
     }, 150);
   }
@@ -222,6 +276,7 @@ export function ConceptAutocomplete(props: ConceptAutocompleteProps): JSX.Elemen
       <input
         type="text"
         value={draft()}
+        title={props.title ?? ""}
         placeholder={props.placeholder ?? ""}
         aria-label={props.aria_label}
         aria-autocomplete="list"
@@ -269,6 +324,9 @@ export function ConceptAutocomplete(props: ConceptAutocompleteProps): JSX.Elemen
             "z-index": "20",
             "min-width": "100%",
             "box-shadow": "0 2px 6px rgba(0,0,0,0.15)",
+            /* prevent overflow viewport on long concept lists */
+            "max-height": "240px",
+            "overflow-y": "auto",
           }}
         >
           <For each={suggestions()}>

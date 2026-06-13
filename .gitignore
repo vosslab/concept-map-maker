@@ -22,6 +22,8 @@ test-results/
 playwright-report/
 blob-report/
 coverage/
+# Smoke-test screenshots and video artifacts
+output_smoke/
 
 # Bundler artifacts
 meta.json

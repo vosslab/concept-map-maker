@@ -37,7 +37,6 @@ import { concept_key } from "./types";
 import type {
   CmapDocument,
   Triple,
-  Definition,
   Theme,
   ThemeShape,
   ThemePalette,
@@ -62,6 +61,17 @@ export type StorageLike = Pick<Storage, "getItem" | "setItem">;
 // the source endpoint, "to" is the target endpoint, "both" is a concept that is
 // itself hovered (a node hover lights up every triple touching it).
 export type HighlightRole = "from" | "to" | "both";
+
+// The role a concept-table cell plays relative to the single "active concept"
+// (the concept whose cell is focused, or hovered while nothing is focused).
+//   - "same": this cell's value IS the active concept (every matching cell).
+//   - "from": this cell is the FROM endpoint of a triple whose TO is the active
+//     concept (it points INTO the active concept).
+//   - "to": this cell is the TO endpoint of a triple whose FROM is the active
+//     concept (the active concept points OUT to it).
+// Precedence when a concept qualifies for more than one (a cycle): same > from
+// > to. The active concept itself is always "same".
+export type CellRole = "from" | "to" | "same";
 
 // Injection seam for the layout function so behavior tests can count how often
 // layout runs (and assert a drag override never invokes it). Defaults to the
@@ -92,6 +102,29 @@ export interface AppState {
   highlighted_triples: Accessor<Set<string>>;
   highlighted_concepts: Accessor<Map<ConceptKey, HighlightRole>>;
 
+  // The raw focused-cell channel value (the committed concept of the currently
+  // focused cell, or null). Exposed so row unmount can guard its cleanup against
+  // only the rows it actually owns (prevents a bulk re-render from stomping focus
+  // that legitimately belongs to a surviving row).
+  focused_concept: Accessor<ConceptKey | null>;
+
+  // The single concept currently driving per-cell triple-table highlighting.
+  // Focus wins over hover: it is the focused cell's committed value when a cell
+  // is focused, else the hovered cell's value, else null. Empty cells never set
+  // it. See set_cell_focus / set_cell_hover for the transition wiring.
+  active_concept: Accessor<ConceptKey | null>;
+
+  // One keyed map rebuilt per active_concept change. Each table cell does a
+  // single lookup by its own concept key to find its CellRole (or no entry,
+  // meaning "no highlight"). Empty when active_concept is null.
+  cell_classification: Accessor<Map<ConceptKey, CellRole>>;
+
+  // Cell focus/hover wiring for active_concept. Callers pass a cell's COMMITTED
+  // value (or null to clear). An empty/blank value clears that channel so blank
+  // cells never activate highlighting.
+  set_cell_focus: (value: string | null) => void;
+  set_cell_hover: (value: string | null) => void;
+
   // True when autosave is active; false when storage was unavailable/threw.
   autosave_enabled: Accessor<boolean>;
 
@@ -99,16 +132,13 @@ export interface AppState {
   update_triple: (id: string, patch: Partial<Omit<Triple, "id">>) => void;
   add_triple: (triple?: Partial<Triple>) => string;
   remove_triple: (id: string) => void;
-  update_definition: (id: string, patch: Partial<Omit<Definition, "id">>) => void;
-  add_definition: (definition?: Partial<Definition>) => string;
-  remove_definition: (id: string) => void;
   set_title: (title: string) => void;
   set_theme: (patch: Partial<Theme>) => void;
   set_override: (key: ConceptKey, position: Position) => void;
   clear_overrides: () => void;
   replace_document: (next: CmapDocument) => void;
   bulk_insert_triples: (rows: Array<Partial<Triple>>) => string[];
-  bulk_insert_definitions: (rows: Array<Partial<Definition>>) => string[];
+  insert_triple_after: (after_index: number, triple?: Partial<Triple>) => string;
 
   // Dispose the reactive root (tests and teardown).
   dispose: () => void;
@@ -117,7 +147,7 @@ export interface AppState {
 //============================================
 // next_id
 //============================================
-// Generate a short, collision-resistant id for new triples/definitions. Not
+// Generate a short, collision-resistant id for new triples. Not
 // cryptographic; just needs to be unique within one document session.
 let id_counter = 0;
 function next_id(prefix: string): string {
@@ -227,6 +257,57 @@ export function compute_highlighted_concepts(
       }
     }
   }
+  return result;
+}
+
+//============================================
+// compute_cell_classification
+//============================================
+// Pure: build the per-concept-key CellRole map for one active concept.
+//
+// Walks every triple exactly once and tags partner concepts relative to the
+// active concept:
+//   - the active concept key itself -> "same".
+//   - a triple's FROM whose TO is the active concept -> "from" (points in).
+//   - a triple's TO whose FROM is the active concept -> "to" (points out).
+// Precedence when a concept qualifies for more than one role (a cycle through
+// the active concept): same > from > to. We never downgrade an existing entry,
+// and "same" is written last so it always wins.
+//
+// Returns an empty map when active is null or empty, so blank cells never
+// activate highlighting. Exported for direct unit testing of the contract.
+export function compute_cell_classification(
+  active: ConceptKey | null,
+  triples: Triple[],
+): Map<ConceptKey, CellRole> {
+  const result = new Map<ConceptKey, CellRole>();
+  // null or empty active concept yields no highlighting at all
+  if (active === null || active === "") {
+    return result;
+  }
+  // walk every triple once, tagging the partner endpoint of any triple that
+  // touches the active concept
+  for (const triple of triples) {
+    const from_key = concept_key(triple.from);
+    const to_key = concept_key(triple.to);
+    // active is this triple's TO: its FROM partner points INTO the active concept
+    if (to_key === active && from_key !== "" && from_key !== active) {
+      // do not downgrade a concept already tagged "from"; "from" beats "to"
+      if (!result.has(from_key)) {
+        result.set(from_key, "from");
+      }
+    }
+    // active is this triple's FROM: its TO partner is pointed OUT to by active
+    if (from_key === active && to_key !== "" && to_key !== active) {
+      // only set "to" when no stronger role ("from") was already assigned
+      if (!result.has(to_key)) {
+        result.set(to_key, "to");
+      }
+    }
+  }
+  // the active concept itself is always "same"; written last so it overrides any
+  // "from"/"to" a self-touching triple may have tried to assign to it
+  result.set(active, "same");
   return result;
 }
 
@@ -361,8 +442,7 @@ function build_state(
   // depths: BFS depth from origins. Triples-only.
   const depths = createMemo<DepthResult>(() => compute_depths(doc.triples));
 
-  // validation: rubric/quality/hint items. Depends on the whole document (it
-  // checks triples AND definitions), so it reads the fields it needs.
+  // validation: rubric/quality/hint items. Depends on triples only.
   const validation = createMemo<ValidationItem[]>(() => validate_document(doc));
 
   // layout: dagre positions keyed by concept. CRITICAL CONTRACT: reads ONLY
@@ -408,6 +488,58 @@ function build_state(
   );
 
   //--------------------------------------------
+  // active-concept (per-cell triple-table highlighting)
+  //--------------------------------------------
+
+  // Two independent channels: the focused cell's concept and the hovered cell's
+  // concept. Each holds a normalized ConceptKey or null. Empty values are stored
+  // as null so a blank cell never activates highlighting. These are separate
+  // from the map-pane hover signal above and never feed the map.
+  const [focused_concept, set_focused_concept] = createSignal<ConceptKey | null>(null);
+  const [hovered_concept, set_hovered_concept] = createSignal<ConceptKey | null>(null);
+
+  // Normalize a caller-provided cell value into a stored channel value: blank or
+  // null becomes null (no activation), otherwise the normalized concept key.
+  const normalize_cell_value = (value: string | null): ConceptKey | null => {
+    if (value === null) {
+      return null;
+    }
+    const key = concept_key(value);
+    return key === "" ? null : key;
+  };
+
+  // set_cell_focus: a from/to cell gained or lost focus. Pass the cell's
+  // COMMITTED value on focus-in, null on focus-out. Focus always wins over hover
+  // while set (see active_concept below).
+  const set_cell_focus = (value: string | null): void => {
+    set_focused_concept(normalize_cell_value(value));
+  };
+
+  // set_cell_hover: a from/to cell was hovered or unhovered. Pass the cell's
+  // value on enter, null on leave. Only takes effect when no cell is focused.
+  const set_cell_hover = (value: string | null): void => {
+    set_hovered_concept(normalize_cell_value(value));
+  };
+
+  // active_concept: focus wins over hover. When a cell is focused, the focused
+  // concept is active; otherwise the hovered concept; otherwise null. Focus
+  // leaving (focused -> null) falls back to the current hover target or clears.
+  const active_concept = createMemo<ConceptKey | null>(() => {
+    const focused = focused_concept();
+    if (focused !== null) {
+      return focused;
+    }
+    return hovered_concept();
+  });
+
+  // cell_classification: one keyed map rebuilt only when active_concept changes
+  // (or the triple set changes). Each table cell does a single lookup by its own
+  // concept key. Delegates to the pure compute_cell_classification helper.
+  const cell_classification = createMemo<Map<ConceptKey, CellRole>>(() =>
+    compute_cell_classification(active_concept(), doc.triples),
+  );
+
+  //--------------------------------------------
   // mutation actions
   //--------------------------------------------
 
@@ -443,38 +575,6 @@ function build_state(
     set_doc(
       "triples",
       doc.triples.filter((t) => t.id !== id),
-    );
-  };
-
-  // update_definition: patch fields of a definition by id.
-  const update_definition = (id: string, patch: Partial<Omit<Definition, "id">>): void => {
-    set_doc(
-      "definitions",
-      (d) => d.id === id,
-      produce((definition: Definition) => {
-        if (patch.word !== undefined) definition.word = patch.word;
-        if (patch.definition !== undefined) definition.definition = patch.definition;
-      }),
-    );
-  };
-
-  // add_definition: append a definition (optionally pre-filled) and return its id.
-  const add_definition = (definition?: Partial<Definition>): string => {
-    const id = definition?.id ?? next_id("d");
-    const row: Definition = {
-      id,
-      word: definition?.word ?? "",
-      definition: definition?.definition ?? "",
-    };
-    set_doc("definitions", doc.definitions.length, row);
-    return id;
-  };
-
-  // remove_definition: drop a definition by id.
-  const remove_definition = (id: string): void => {
-    set_doc(
-      "definitions",
-      doc.definitions.filter((d) => d.id !== id),
     );
   };
 
@@ -515,6 +615,27 @@ function build_state(
     set_doc(reconcile(next));
   };
 
+  // insert_triple_after: insert a single triple directly after the given row
+  // index and return its id. Used by the chain button to insert a row with a
+  // pre-filled "from" directly below the source row.
+  const insert_triple_after = (after_index: number, triple?: Partial<Triple>): string => {
+    const id = triple?.id ?? next_id("t");
+    const row: Triple = {
+      id,
+      from: triple?.from ?? "",
+      verb: triple?.verb ?? "",
+      to: triple?.to ?? "",
+    };
+    set_doc("triples", (current) => {
+      // Insert at after_index + 1; clamp to end if out of range.
+      const insert_at = Math.min(after_index + 1, current.length);
+      const next = [...current];
+      next.splice(insert_at, 0, row);
+      return next;
+    });
+    return id;
+  };
+
   // bulk_insert_triples: append many rows at once (spreadsheet paste). Returns
   // the new ids in order. Single store write so layout/derivation recompute once.
   const bulk_insert_triples = (rows: Array<Partial<Triple>>): string[] => {
@@ -525,17 +646,6 @@ function build_state(
       to: r.to ?? "",
     }));
     set_doc("triples", (current) => [...current, ...new_rows]);
-    return new_rows.map((r) => r.id);
-  };
-
-  // bulk_insert_definitions: append many definition rows at once (paste).
-  const bulk_insert_definitions = (rows: Array<Partial<Definition>>): string[] => {
-    const new_rows: Definition[] = rows.map((r) => ({
-      id: r.id ?? next_id("d"),
-      word: r.word ?? "",
-      definition: r.definition ?? "",
-    }));
-    set_doc("definitions", (current) => [...current, ...new_rows]);
     return new_rows.map((r) => r.id);
   };
 
@@ -592,20 +702,22 @@ function build_state(
     node_position,
     highlighted_triples,
     highlighted_concepts,
+    focused_concept,
+    active_concept,
+    cell_classification,
+    set_cell_focus,
+    set_cell_hover,
     autosave_enabled,
     update_triple,
     add_triple,
     remove_triple,
-    update_definition,
-    add_definition,
-    remove_definition,
     set_title,
     set_theme,
     set_override,
     clear_overrides,
     replace_document,
     bulk_insert_triples,
-    bulk_insert_definitions,
+    insert_triple_after,
     dispose: () => {},
   };
 
@@ -619,9 +731,9 @@ function build_state(
     let first_run = true;
     createEffect(() => {
       // serialize inside the tracking context so every document field (title,
-      // triples, definitions, overrides, theme) is read deeply: any mutation to
-      // the autosaved document re-runs this effect. Hover and layout are NOT
-      // read here, so they never schedule a save.
+      // triples, overrides, theme) is read deeply: any mutation to the autosaved
+      // document re-runs this effect. Hover and layout are NOT read here, so
+      // they never schedule a save.
       const json_text = serialize_document(doc);
       // skip the initial run: a freshly booted document does not need re-saving
       if (first_run) {

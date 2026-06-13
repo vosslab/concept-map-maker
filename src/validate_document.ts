@@ -55,8 +55,7 @@ function levenshtein_distance_at_most_1(a: string, b: string): boolean {
 // validate_document
 //============================================
 // Runs all validation rules against a CmapDocument and returns an ordered list
-// of ValidationItems. Rubric rules emit "pass"/"fail". Quality rules emit
-// "warn". Advisory rules emit "hint".
+// of ValidationItems. Rubric rules emit "pass"/"fail". Quality rules emit "warn".
 export function validate_document(doc: CmapDocument): ValidationItem[] {
   const results: ValidationItem[] = [];
 
@@ -117,21 +116,6 @@ export function validate_document(doc: CmapDocument): ValidationItem[] {
         ? "Every arrow has a verb label"
         : `${no_verb_rows.length} arrow${no_verb_rows.length === 1 ? "" : "s"} missing a verb label`,
     tripleIds: no_verb_rows.length > 0 ? no_verb_rows.map((t) => t.id) : undefined,
-  });
-
-  //--------------------------------------------------
-  // RUBRIC: at least 10 non-empty definitions (fail/pass)
-  //--------------------------------------------------
-  const filled_definitions = doc.definitions.filter(
-    (d) => d.word.trim() !== "" && d.definition.trim() !== "",
-  );
-  results.push({
-    rule: "min_10_definitions",
-    level: filled_definitions.length >= 10 ? "pass" : "fail",
-    message:
-      filled_definitions.length >= 10
-        ? `${filled_definitions.length} definitions (meets minimum of 10)`
-        : `Only ${filled_definitions.length} definition${filled_definitions.length === 1 ? "" : "s"} - need at least 10`,
   });
 
   //--------------------------------------------------
@@ -253,30 +237,6 @@ export function validate_document(doc: CmapDocument): ValidationItem[] {
       message: `${near_miss_pairs.length} near-miss concept pair${near_miss_pairs.length === 1 ? "" : "s"} (spelling differs by 1 edit)`,
       conceptKeys: near_miss_keys,
     });
-  }
-
-  //--------------------------------------------------
-  // HINT: defined word absent from all concept labels and verb phrases
-  //--------------------------------------------------
-  // A defined word is "absent" when it does not appear as a case-insensitive
-  // substring in any concept label (from/to of complete triples) or any verb phrase.
-  const map_text_lower = [
-    ...complete_triples.map((t) => t.from.toLowerCase()),
-    ...complete_triples.map((t) => t.to.toLowerCase()),
-    ...complete_triples.map((t) => t.verb.toLowerCase()),
-  ];
-
-  for (const def of filled_definitions) {
-    const word_lower = def.word.trim().toLowerCase();
-    if (word_lower === "") continue;
-    const found = map_text_lower.some((text) => text.includes(word_lower));
-    if (!found) {
-      results.push({
-        rule: "defined_word_absent",
-        level: "hint",
-        message: `Defined word "${def.word.trim()}" does not appear in any concept or verb phrase`,
-      });
-    }
   }
 
   return results;

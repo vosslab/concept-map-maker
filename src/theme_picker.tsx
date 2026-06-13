@@ -25,6 +25,7 @@ const SHAPE_LABELS: Record<ThemeShape, string> = {
   rounded: "Rounded",
   rect: "Rectangle",
   oval: "Oval",
+  capsule: "Capsule",
 };
 
 // Human-facing labels for each palette option; keys mirror PALETTES.

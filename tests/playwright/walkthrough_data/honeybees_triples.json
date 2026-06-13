@@ -1,0 +1,10 @@
+[
+  { "from": "honeybees", "verb": "make", "to": "honey" },
+  { "from": "honeybees", "verb": "are divided into", "to": "castes" },
+  { "from": "castes", "verb": "include", "to": "workers" },
+  { "from": "castes", "verb": "include", "to": "drones" },
+  { "from": "castes", "verb": "include", "to": "queen" },
+  { "from": "queen", "verb": "has gender", "to": "female" },
+  { "from": "drones", "verb": "have gender", "to": "male" },
+  { "from": "workers", "verb": "have gender", "to": "female" }
+]

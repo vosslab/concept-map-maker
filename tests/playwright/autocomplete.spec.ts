@@ -1,6 +1,6 @@
 // autocomplete.spec.ts - keyboard navigation in ConceptAutocomplete.
 //
-// Covers the keyboard behaviors specified in WP-B2b:
+// Covers the keyboard behaviors for concept autocomplete dropdown navigation:
 //   1. ArrowDown then Enter selects a suggestion from the dropdown and commits
 //      that suggestion's exact label as the cell value.
 //   2. Escape closes the dropdown and keeps the currently-typed text without
@@ -18,6 +18,7 @@ test("ArrowDown and Enter select existing concept from dropdown", async ({ page 
 
   // Add the first row and enter a triple to seed the concept "Mitochondria".
   await page.getByRole("button", { name: "+ Add row" }).click();
+  // Guard the 150ms blur timer so the row is fully committed before enter_triple.
   await page.waitForTimeout(100);
   await enter_triple(page, 1, "Mitochondria", "produce", "ATP");
 
@@ -26,7 +27,6 @@ test("ArrowDown and Enter select existing concept from dropdown", async ({ page 
   const from2 = page.getByLabel("Row 2 from concept");
   await from2.click();
   await from2.pressSequentially("mito");
-  await page.waitForTimeout(200);
 
   // The dropdown listbox should be visible with at least one option.
   const listbox = page.locator('[role="listbox"]');
@@ -34,6 +34,7 @@ test("ArrowDown and Enter select existing concept from dropdown", async ({ page 
 
   // Press ArrowDown to move highlight to the first option.
   await page.keyboard.press("ArrowDown");
+  // getAttribute does not auto-retry; wait for ArrowDown state to settle.
   await page.waitForTimeout(50);
 
   // The first option should now be aria-selected=true.
@@ -43,6 +44,7 @@ test("ArrowDown and Enter select existing concept from dropdown", async ({ page 
 
   // Press Enter to commit the highlighted suggestion.
   await page.keyboard.press("Enter");
+  // inputValue does not auto-retry; guard the commit propagation.
   await page.waitForTimeout(200);
 
   // The input value should now be the canonical casing of the existing concept.
@@ -58,6 +60,7 @@ test("Escape closes dropdown and keeps typed text", async ({ page }) => {
 
   // Seed a concept to ensure the dropdown opens.
   await page.getByRole("button", { name: "+ Add row" }).click();
+  // Guard the 150ms blur timer so the row is fully committed before enter_triple.
   await page.waitForTimeout(100);
   await enter_triple(page, 1, "Chloroplast", "absorbs", "Light");
 
@@ -65,7 +68,6 @@ test("Escape closes dropdown and keeps typed text", async ({ page }) => {
   const from2 = page.getByLabel("Row 2 from concept");
   await from2.click();
   await from2.pressSequentially("Chlor");
-  await page.waitForTimeout(200);
 
   // Dropdown should be open.
   const listbox = page.locator('[role="listbox"]');
@@ -73,7 +75,6 @@ test("Escape closes dropdown and keeps typed text", async ({ page }) => {
 
   // Press Escape: closes the dropdown, keeps the typed text "Chlor".
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(100);
 
   // Dropdown should be closed.
   await expect(listbox).not.toBeVisible();

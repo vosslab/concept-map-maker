@@ -14,20 +14,13 @@ export interface Triple {
   to: string;
 }
 
-// A glossary entry. Independent of the graph in v1.
-export interface Definition {
-  id: string;
-  word: string;
-  definition: string;
-}
-
 // A normalized concept identity. Produced by concept_key(): trimmed, internal
 // whitespace collapsed to single spaces, lowercased. Two labels that differ
 // only in casing or whitespace share one ConceptKey (and therefore one bubble).
 export type ConceptKey = string;
 
 // Bubble shape applied map-wide.
-export type ThemeShape = "rounded" | "rect" | "oval";
+export type ThemeShape = "rounded" | "rect" | "oval" | "capsule";
 
 // Color palette applied map-wide.
 export type ThemePalette = "earth" | "fire";
@@ -49,7 +42,6 @@ export interface CmapDocument {
   version: 1;
   title: string;
   triples: Triple[];
-  definitions: Definition[];
   overrides: Record<ConceptKey, Position>;
   theme: Theme;
 }
@@ -62,13 +54,11 @@ export interface HoverState {
   conceptKey: ConceptKey | null;
 }
 
-// One result from a validation rule. Severity is split four ways: pass/warn/fail
-// for rubric rules, plus hint for low-severity advisory checks (e.g. a defined
-// word that appears nowhere in the map text) that must never make the rubric
-// panel look incomplete.
+// One result from a validation rule. Severity is split three ways: pass/warn/fail
+// for rubric rules.
 export interface ValidationItem {
   rule: string;
-  level: "pass" | "warn" | "fail" | "hint";
+  level: "pass" | "warn" | "fail";
   message: string;
   tripleIds?: string[];
   conceptKeys?: ConceptKey[];

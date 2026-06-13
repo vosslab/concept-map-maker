@@ -200,6 +200,23 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
         />
       );
     }
+    // capsule: stadium shape with rx = ry = half the node height (fully rounded ends)
+    if (shape_spec().is_capsule) {
+      const cap_r = props.box.h / 2;
+      return (
+        <rect
+          x={props.box.x - props.box.w / 2}
+          y={props.box.y - props.box.h / 2}
+          width={props.box.w}
+          height={props.box.h}
+          rx={cap_r}
+          ry={cap_r}
+          fill={fill()}
+          stroke={stroke_color()}
+          stroke-width={stroke_width()}
+        />
+      );
+    }
     // rect / rounded-rect: convert center-based box to top-left origin
     return (
       <rect
@@ -231,6 +248,23 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
           cy={props.box.y}
           rx={props.box.w / 2 + RING_PAD}
           ry={props.box.h / 2 + RING_PAD}
+          fill="none"
+          stroke={color}
+          stroke-width={RING_WIDTH}
+        />
+      );
+    }
+    // capsule highlight ring: match the capsule rx = ry = half height, plus RING_PAD
+    if (shape_spec().is_capsule) {
+      const cap_r = props.box.h / 2 + RING_PAD;
+      return (
+        <rect
+          x={props.box.x - props.box.w / 2 - RING_PAD}
+          y={props.box.y - props.box.h / 2 - RING_PAD}
+          width={props.box.w + RING_PAD * 2}
+          height={props.box.h + RING_PAD * 2}
+          rx={cap_r}
+          ry={cap_r}
           fill="none"
           stroke={color}
           stroke-width={RING_WIDTH}

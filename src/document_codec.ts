@@ -5,7 +5,7 @@
 // stale position overrides, and serializing back to JSON. Future schema
 // migrations live here behind the version gate.
 
-import type { CmapDocument, Triple, Definition, Position, Theme } from "./types";
+import type { CmapDocument, Triple, Position, Theme } from "./types";
 import { concept_key } from "./types";
 
 // The only document format tag this app understands.
@@ -27,7 +27,6 @@ export function empty_document(): CmapDocument {
     version: CURRENT_VERSION,
     title: "Untitled concept map",
     triples: [],
-    definitions: [],
     overrides: {},
     theme: { shape: DEFAULT_THEME.shape, palette: DEFAULT_THEME.palette },
   };
@@ -81,22 +80,12 @@ function validate_triple(raw: unknown, index: number): Triple {
   return triple;
 }
 
-function validate_definition(raw: unknown, index: number): Definition {
-  const obj = require_object(raw, `definitions[${index}]`);
-  const definition: Definition = {
-    id: require_string(obj.id, `definitions[${index}].id`),
-    word: require_string(obj.word, `definitions[${index}].word`),
-    definition: require_string(obj.definition, `definitions[${index}].definition`),
-  };
-  return definition;
-}
-
 function validate_theme(raw: unknown): Theme {
   const obj = require_object(raw, "theme");
   const shape = require_string(obj.shape, "theme.shape");
   const palette = require_string(obj.palette, "theme.palette");
   // gate shape against the known set
-  if (shape !== "rounded" && shape !== "rect" && shape !== "oval") {
+  if (shape !== "rounded" && shape !== "rect" && shape !== "oval" && shape !== "capsule") {
     throw new Error(`Invalid document: theme.shape "${shape}" is not a known shape.`);
   }
   // gate palette against the known set
@@ -194,8 +183,9 @@ export function parse_document(json_text: string): CmapDocument {
   const title = require_string(obj.title, "title");
   const raw_triples = require_array(obj.triples, "triples");
   const triples = raw_triples.map(validate_triple);
-  const raw_definitions = require_array(obj.definitions, "definitions");
-  const definitions = raw_definitions.map(validate_definition);
+  // definitions field is intentionally ignored: the feature was removed.
+  // Old files that contain a "definitions" key are silently accepted; the
+  // field is not read or round-tripped.
   const overrides = validate_overrides(obj.overrides);
   const theme = validate_theme(obj.theme);
 
@@ -207,7 +197,6 @@ export function parse_document(json_text: string): CmapDocument {
     version: CURRENT_VERSION,
     title,
     triples,
-    definitions,
     overrides: pruned_overrides,
     theme,
   };
@@ -227,7 +216,6 @@ export function serialize_document(doc: CmapDocument): string {
     version: CURRENT_VERSION,
     title: doc.title,
     triples: doc.triples,
-    definitions: doc.definitions,
     overrides: pruned_overrides,
     theme: doc.theme,
   };

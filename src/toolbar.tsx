@@ -216,91 +216,124 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
       />
 
       {/* --- FILE GROUP --- */}
-      <span class="toolbar-group" aria-label="File actions">
-        <button class="toolbar-btn" aria-label="Save project as JSON" onClick={handle_save}>
-          Save project
-        </button>
+      <span class="toolbar-group" role="group" aria-labelledby="tg-caption-file">
+        <span class="toolbar-group-caption" id="tg-caption-file">
+          File
+        </span>
+        <span class="toolbar-group-buttons">
+          <button class="toolbar-btn" aria-label="Save project as JSON" onClick={handle_save}>
+            <i class="fa-solid fa-floppy-disk" aria-hidden="true" />
+            Save project
+          </button>
 
-        <button class="toolbar-btn" aria-label="Open project JSON" onClick={handle_open_click}>
-          Open project
-        </button>
+          <button class="toolbar-btn" aria-label="Open project JSON" onClick={handle_open_click}>
+            <i class="fa-solid fa-folder-open" aria-hidden="true" />
+            Open project
+          </button>
 
-        {/* Hidden JSON file picker */}
-        <input
-          ref={set_json_input_ref}
-          type="file"
-          accept=".json,application/json"
-          style="display:none"
-          onChange={handle_json_file_change}
-        />
+          {/* Hidden JSON file picker */}
+          <input
+            ref={set_json_input_ref}
+            type="file"
+            accept=".json,application/json"
+            style="display:none"
+            onChange={handle_json_file_change}
+          />
 
-        <button
-          class="toolbar-btn toolbar-btn-danger"
-          aria-label="Clear document"
-          onClick={handle_clear}
-        >
-          Clear
-        </button>
+          <button
+            class="toolbar-btn toolbar-btn-danger"
+            aria-label="Clear document"
+            onClick={handle_clear}
+          >
+            <i class="fa-solid fa-trash-can" aria-hidden="true" />
+            Clear
+          </button>
+        </span>
       </span>
 
       {/* --- CSV GROUP --- */}
-      <span class="toolbar-group" aria-label="CSV import and export">
-        <button class="toolbar-btn" aria-label="Export triples as CSV" onClick={handle_export_csv}>
-          Export triples CSV
-        </button>
+      <span class="toolbar-group" role="group" aria-labelledby="tg-caption-csv">
+        <span class="toolbar-group-caption" id="tg-caption-csv">
+          CSV
+        </span>
+        <span class="toolbar-group-buttons">
+          <button
+            class="toolbar-btn"
+            aria-label="Export triples as CSV"
+            onClick={handle_export_csv}
+          >
+            <i class="fa-solid fa-file-export" aria-hidden="true" />
+            Export triples CSV
+          </button>
 
-        <button
-          class="toolbar-btn"
-          aria-label="Import triples from CSV"
-          onClick={handle_import_csv_click}
-        >
-          Import triples CSV
-        </button>
+          <button
+            class="toolbar-btn"
+            aria-label="Import triples from CSV"
+            onClick={handle_import_csv_click}
+          >
+            <i class="fa-solid fa-file-import" aria-hidden="true" />
+            Import triples CSV
+          </button>
 
-        {/* Hidden CSV file picker */}
-        <input
-          ref={set_csv_input_ref}
-          type="file"
-          accept=".csv,text/csv"
-          style="display:none"
-          onChange={handle_csv_file_change}
-        />
+          {/* Hidden CSV file picker */}
+          <input
+            ref={set_csv_input_ref}
+            type="file"
+            accept=".csv,text/csv"
+            style="display:none"
+            onChange={handle_csv_file_change}
+          />
+        </span>
       </span>
 
       {/* --- IMAGE / PRINT GROUP --- */}
-      <span class="toolbar-group" aria-label="Export and print">
-        <button
-          class="toolbar-btn"
-          aria-label="Export map as SVG"
-          disabled={!svg_ready()}
-          onClick={handle_export_svg}
-        >
-          Export SVG
-        </button>
+      <span class="toolbar-group" role="group" aria-labelledby="tg-caption-imgprint">
+        <span class="toolbar-group-caption" id="tg-caption-imgprint">
+          Image and print
+        </span>
+        <span class="toolbar-group-buttons">
+          <button
+            class="toolbar-btn"
+            aria-label="Export map as SVG"
+            disabled={!svg_ready()}
+            onClick={handle_export_svg}
+          >
+            <i class="fa-solid fa-vector-square" aria-hidden="true" />
+            Export SVG
+          </button>
 
-        <button
-          class="toolbar-btn"
-          aria-label="Export map as PNG"
-          disabled={!svg_ready()}
-          onClick={handle_export_png}
-        >
-          Export PNG
-        </button>
+          <button
+            class="toolbar-btn"
+            aria-label="Export map as PNG"
+            disabled={!svg_ready()}
+            onClick={handle_export_png}
+          >
+            <i class="fa-solid fa-image" aria-hidden="true" />
+            Export PNG
+          </button>
 
-        <button class="toolbar-btn" aria-label="Print concept map" onClick={handle_print}>
-          Print
-        </button>
+          <button class="toolbar-btn" aria-label="Print concept map" onClick={handle_print}>
+            <i class="fa-solid fa-print" aria-hidden="true" />
+            Print
+          </button>
+        </span>
       </span>
 
       {/* --- LAYOUT GROUP --- */}
-      <span class="toolbar-group" aria-label="Layout actions">
-        <button
-          class="toolbar-btn"
-          aria-label="Reset bubble positions to auto-layout"
-          onClick={handle_relayout}
-        >
-          Re-layout
-        </button>
+      <span class="toolbar-group" role="group" aria-labelledby="tg-caption-layout">
+        <span class="toolbar-group-caption" id="tg-caption-layout">
+          Layout
+        </span>
+        <span class="toolbar-group-buttons">
+          <button
+            class="toolbar-btn"
+            aria-label="Reset bubble positions to auto-layout"
+            onClick={handle_relayout}
+          >
+            <i class="fa-solid fa-diagram-project" aria-hidden="true" />
+            Re-layout
+          </button>
+        </span>
       </span>
 
       {/* Autosave status indicator */}

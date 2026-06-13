@@ -14,6 +14,7 @@ concept-map-maker/
 +- run_web_server.sh       # build then serve dist/ locally
 +- run_playwright_tests.sh # build (if needed) and run Playwright suite
 +- check_codebase.sh       # typecheck + lint + format + node test gate
++- run_walkthrough_demo.sh # build then play a scripted walkthrough demo (captures screenshots/video)
 +- source_me.sh            # Python environment bootstrap
 +- package.json            # npm scripts and dependencies
 +- playwright.config.ts    # Playwright configuration
@@ -32,7 +33,7 @@ concept-map-maker/
 - Components: [src/app.tsx](../src/app.tsx), [src/toolbar.tsx](../src/toolbar.tsx),
   [src/map_canvas.tsx](../src/map_canvas.tsx), [src/concept_node.tsx](../src/concept_node.tsx),
   [src/concept_edge.tsx](../src/concept_edge.tsx), [src/triples_table.tsx](../src/triples_table.tsx),
-  [src/triple_row.tsx](../src/triple_row.tsx), [src/definitions_table.tsx](../src/definitions_table.tsx),
+  [src/triple_row.tsx](../src/triple_row.tsx),
   [src/rubric_panel.tsx](../src/rubric_panel.tsx), [src/theme_picker.tsx](../src/theme_picker.tsx),
   [src/concept_autocomplete.tsx](../src/concept_autocomplete.tsx)
 - State and types: [src/app_state.ts](../src/app_state.ts), [src/types.ts](../src/types.ts)
@@ -40,7 +41,8 @@ concept-map-maker/
   [src/layout_graph.ts](../src/layout_graph.ts), [src/graph_depth.ts](../src/graph_depth.ts),
   [src/validate_document.ts](../src/validate_document.ts),
   [src/edge_geometry.ts](../src/edge_geometry.ts), [src/map_bounds.ts](../src/map_bounds.ts),
-  [src/themes.ts](../src/themes.ts)
+  [src/themes.ts](../src/themes.ts),
+  [src/measure_text.ts](../src/measure_text.ts)
 - Codecs and export: [src/document_codec.ts](../src/document_codec.ts),
   [src/csv_codec.ts](../src/csv_codec.ts), [src/export_svg.ts](../src/export_svg.ts)
 - Static assets: [src/index.html](../src/index.html), [src/style.css](../src/style.css)
@@ -55,10 +57,32 @@ See [CODE_ARCHITECTURE.md](CODE_ARCHITECTURE.md) for how these fit together.
 - `tests/playwright/*.spec.ts` - browser E2E specs plus
   [tests/playwright/helpers.ts](../tests/playwright/helpers.ts); run via
   [run_playwright_tests.sh](../run_playwright_tests.sh).
+- `tests/playwright/walkthrough_demo.mts` - standalone
+  scripted walkthrough demo (not a Playwright spec); invoked via
+  `run_walkthrough_demo.sh`.
+- `tests/playwright/walkthrough_data/` - data fixtures for the walkthrough demo
+  (for example `honeybees_triples.json`, the default dataset).
 - `tests/test_*.py` - Python hygiene pytest suite (whitespace, indentation, ASCII,
   markdown links, shebangs, imports, bandit); run with `pytest tests/`.
 - [tests/conftest.py](../tests/conftest.py) excludes `e2e/` and `playwright/` from
   pytest collection.
+
+### vendor/
+
+Third-party assets vendored locally so the app deploys to GitHub Pages with zero external
+runtime dependencies.
+
+- `vendor/fontawesome/fa-solid.min.css` - combined Font Awesome base + solid CSS with
+  `url(./fa-solid-900.woff2)` font path (relative within the folder).
+- `vendor/fontawesome/fa-solid-900.woff2` - Font Awesome 6 Free solid icon font (~155 KB).
+- `vendor/fontawesome/LICENSE.txt` - Font Awesome Free license (SIL OFL for fonts,
+  CC BY 4.0 for icons, MIT for CSS).
+
+The build script copies `vendor/fontawesome/` verbatim into `dist/vendor/fontawesome/` and
+asserts the woff2 file is present before printing "Built dist/ (GitHub Pages-ready).".
+The stylesheet is linked from `src/index.html` as `vendor/fontawesome/fa-solid.min.css`.
+All `vendor/` paths are excluded from pytest hygiene scans via `tests/conftest.py`
+`REPO_HYGIENE_FILTERS`.
 
 ### devel/
 
@@ -75,6 +99,8 @@ See [CODE_ARCHITECTURE.md](CODE_ARCHITECTURE.md) for how these fit together.
 
 - `dist/` - production build output (`main.js`, `main.js.map`, `index.html`,
   `style.css`, `.nojekyll`)
+- `output_smoke/` - smoke-test screenshots and video artifacts captured by the walkthrough
+  demo and other one-off visual checks (gitignored; stable folder name reused across runs)
 - `node_modules/`, `package-lock.json` - npm dependencies
 - `test-results/`, `playwright-report/`, `blob-report/`, `coverage/` - test outputs
 - `*.tsbuildinfo`, `.eslintcache`, `.prettiercache` - tool caches

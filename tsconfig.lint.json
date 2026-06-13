@@ -3,6 +3,7 @@
   "include": [
     "tests/**/*.ts",
     "tests/**/*.tsx",
+    "tests/**/*.mts",
     "tools/**/*.ts",
     "tools/**/*.tsx",
     "tools/**/*.mts",

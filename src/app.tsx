@@ -1,21 +1,77 @@
-// app.tsx - top-level app shell: toolbar strip, editor pane (Triples / Definitions tabs),
+// app.tsx - top-level app shell: toolbar strip, editor pane (Triples tab),
 // map pane, and rubric panel.
 
-import { createSignal } from "solid-js";
+import { createSignal, onMount, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
 
 import { create_app_state, browser_storage } from "./app_state";
-import type { AppState } from "./app_state";
+import type { AppState, StorageLike } from "./app_state";
 import { TriplesTable } from "./triples_table";
-import { DefinitionsTable } from "./definitions_table";
 import { MapCanvas } from "./map_canvas";
 import { ConceptNode } from "./concept_node";
 import { ThemePicker } from "./theme_picker";
 import { RubricPanel } from "./rubric_panel";
 import { Toolbar } from "./toolbar";
 
-// Tab options for the editor pane.
-type EditorTab = "triples" | "definitions";
+// ============================================
+// Resizer constants
+// ============================================
+
+// localStorage key for persisting the editor/map split ratio.
+const RESIZER_STORAGE_KEY = "concept-map-maker:editor-ratio";
+
+// Default ratio (percent) when nothing is stored or value is invalid.
+const RATIO_DEFAULT = 40;
+
+// Minimum and maximum allowed ratio (percent).
+const RATIO_MIN = 25;
+const RATIO_MAX = 65;
+
+// Keyboard step size (percent).
+const RATIO_KEYBOARD_STEP = 2;
+
+// ============================================
+// Resizer helpers
+// ============================================
+
+// load_ratio reads from localStorage and applies the fallback/clamp rules:
+//   - missing, non-numeric, or malformed -> RATIO_DEFAULT
+//   - numeric but out of range -> clamp to [RATIO_MIN, RATIO_MAX]
+// Returns the corrected numeric value (not a CSS string).
+function load_ratio(storage: StorageLike | null): number {
+  if (storage === null) {
+    return RATIO_DEFAULT;
+  }
+  const raw = storage.getItem(RESIZER_STORAGE_KEY);
+  if (raw === null) {
+    return RATIO_DEFAULT;
+  }
+  const parsed = parseFloat(raw);
+  if (!isFinite(parsed)) {
+    return RATIO_DEFAULT;
+  }
+  // Clamp to allowed bounds.
+  if (parsed < RATIO_MIN) {
+    return RATIO_MIN;
+  }
+  if (parsed > RATIO_MAX) {
+    return RATIO_MAX;
+  }
+  return parsed;
+}
+
+// save_ratio writes the numeric ratio to localStorage (if available).
+function save_ratio(storage: StorageLike | null, ratio: number): void {
+  if (storage === null) {
+    return;
+  }
+  storage.setItem(RESIZER_STORAGE_KEY, String(ratio));
+}
+
+// apply_ratio writes the CSS custom property onto a .main-area element.
+function apply_ratio(main_el: HTMLElement, ratio: number): void {
+  main_el.style.setProperty("--editor-ratio", `${ratio}%`);
+}
 
 // ============================================
 // App shell
@@ -24,13 +80,137 @@ type EditorTab = "triples" | "definitions";
 export function App(): JSX.Element {
   // Construct the single reactive state root for the entire app.
   // browser_storage() resolves window.localStorage safely for non-browser envs.
-  const state: AppState = create_app_state(browser_storage());
-
-  const [active_tab, set_active_tab] = createSignal<EditorTab>("triples");
+  const storage = browser_storage();
+  const state: AppState = create_app_state(storage);
 
   // svg_el: capture the live <svg> element from MapCanvas so Toolbar can pass
   // it to export_svg functions. Null until MapCanvas mounts.
   const [svg_el, set_svg_el] = createSignal<SVGSVGElement | null>(null);
+
+  // editor_ratio: the current split ratio (number, percent without '%').
+  // Loaded from localStorage on mount; written back whenever it changes.
+  const [editor_ratio, set_editor_ratio] = createSignal<number>(RATIO_DEFAULT);
+
+  // Ref to the .main-area element so we can apply the CSS custom property inline
+  // and measure its width during drag.
+  let main_el: HTMLElement | null = null;
+
+  // Ref to the resizer divider element, used for pointer capture and keyboard.
+  let resizer_el: HTMLDivElement | null = null;
+
+  // Callback ref setters: SolidJS calls these with the live DOM node when the
+  // element mounts, assigning the mutable variables above.
+  const set_main_el = (el: HTMLElement): void => {
+    main_el = el;
+  };
+  const set_resizer_el = (el: HTMLDivElement): void => {
+    resizer_el = el;
+  };
+
+  // on mount: load persisted ratio and apply.
+  onMount(() => {
+    // Resizer ratio: load, persist corrected value, apply CSS property.
+    const ratio = load_ratio(storage);
+    // Write corrected value back so a clamped or defaulted value is stored.
+    save_ratio(storage, ratio);
+    set_editor_ratio(ratio);
+    if (main_el !== null) {
+      apply_ratio(main_el, ratio);
+    }
+  });
+
+  // ============================================
+  // Drag handlers (pointer events, setPointerCapture)
+  // ============================================
+
+  // Commit a new ratio: clamp, update signal, persist, apply CSS.
+  function commit_ratio(ratio: number): void {
+    // Clamp to allowed range.
+    const clamped = Math.min(RATIO_MAX, Math.max(RATIO_MIN, ratio));
+    set_editor_ratio(clamped);
+    save_ratio(storage, clamped);
+    if (main_el !== null) {
+      apply_ratio(main_el, clamped);
+    }
+  }
+
+  function on_pointer_down(event: PointerEvent): void {
+    if (resizer_el === null || main_el === null) {
+      return;
+    }
+    // Only respond to primary pointer button.
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    // Capture pointer so pointermove fires even outside the element.
+    resizer_el.setPointerCapture(event.pointerId);
+    resizer_el.classList.add("pane-resizer--dragging");
+    document.body.classList.add("resizer-active");
+  }
+
+  function on_pointer_move(event: PointerEvent): void {
+    if (resizer_el === null || main_el === null) {
+      return;
+    }
+    // Only process moves while we hold the pointer capture.
+    if (!resizer_el.hasPointerCapture(event.pointerId)) {
+      return;
+    }
+    const rect = main_el.getBoundingClientRect();
+    // Compute what fraction of the main-area width the cursor is at.
+    const offset_x = event.clientX - rect.left;
+    const new_ratio = (offset_x / rect.width) * 100;
+    commit_ratio(new_ratio);
+  }
+
+  function on_pointer_up(event: PointerEvent): void {
+    if (resizer_el === null) {
+      return;
+    }
+    resizer_el.classList.remove("pane-resizer--dragging");
+    document.body.classList.remove("resizer-active");
+    // Release capture if we still hold it.
+    if (resizer_el.hasPointerCapture(event.pointerId)) {
+      resizer_el.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  // on_lost_pointer_capture: idempotent cleanup in case the browser cancels
+  // pointer capture without firing pointerup (e.g. window blur, touch cancel).
+  function on_lost_pointer_capture(): void {
+    if (resizer_el !== null) {
+      resizer_el.classList.remove("pane-resizer--dragging");
+    }
+    document.body.classList.remove("resizer-active");
+  }
+
+  // ============================================
+  // Keyboard handler (arrow keys: 2% step)
+  // ============================================
+
+  function on_key_down(event: KeyboardEvent): void {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      commit_ratio(editor_ratio() - RATIO_KEYBOARD_STEP);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      commit_ratio(editor_ratio() + RATIO_KEYBOARD_STEP);
+    }
+  }
+
+  // ============================================
+  // Double-click: reset to default
+  // ============================================
+
+  function on_double_click(): void {
+    commit_ratio(RATIO_DEFAULT);
+  }
+
+  // Clean up body class if the component ever unmounts.
+  onCleanup(() => {
+    document.body.classList.remove("resizer-active");
+  });
 
   return (
     <div class="app-shell">
@@ -40,52 +220,35 @@ export function App(): JSX.Element {
       </header>
 
       {/* Main content area: editor pane (left) + map pane (right) */}
-      <main class="main-area" role="main">
+      <main class="main-area" role="main" ref={set_main_el}>
         {/* Left: editor pane with tab switcher */}
         <section class="editor-pane" aria-label="Editor pane">
-          <div class="tab-bar" role="tablist" aria-label="Editor tabs">
-            <button
-              role="tab"
-              class={active_tab() === "triples" ? "tab tab-active" : "tab"}
-              aria-selected={active_tab() === "triples"}
-              aria-controls="panel-triples"
-              id="tab-triples"
-              onClick={() => set_active_tab("triples")}
-            >
-              Triples
-            </button>
-            <button
-              role="tab"
-              class={active_tab() === "definitions" ? "tab tab-active" : "tab"}
-              aria-selected={active_tab() === "definitions"}
-              aria-controls="panel-definitions"
-              id="tab-definitions"
-              onClick={() => set_active_tab("definitions")}
-            >
-              Definitions
-            </button>
-          </div>
-
-          <div
-            id="panel-triples"
-            role="tabpanel"
-            aria-labelledby="tab-triples"
-            hidden={active_tab() !== "triples"}
-          >
+          <div>
             <h2 class="pane-heading">Triples</h2>
             <TriplesTable state={state} />
           </div>
-
-          <div
-            id="panel-definitions"
-            role="tabpanel"
-            aria-labelledby="tab-definitions"
-            hidden={active_tab() !== "definitions"}
-          >
-            <h2 class="pane-heading">Definitions</h2>
-            <DefinitionsTable state={state} />
-          </div>
         </section>
+
+        {/* Draggable divider between editor pane and map pane */}
+        <div
+          ref={set_resizer_el}
+          class="pane-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize editor and map panes"
+          aria-valuenow={editor_ratio()}
+          aria-valuemin={RATIO_MIN}
+          aria-valuemax={RATIO_MAX}
+          aria-valuetext={`${editor_ratio()}% editor width`}
+          tabindex="0"
+          onPointerDown={on_pointer_down}
+          onPointerMove={on_pointer_move}
+          onPointerUp={on_pointer_up}
+          onPointerCancel={on_pointer_up}
+          onLostPointerCapture={on_lost_pointer_capture}
+          onKeyDown={on_key_down}
+          onDblClick={on_double_click}
+        />
 
         {/* Right: concept map canvas */}
         <section class="map-pane" aria-label="Concept map">

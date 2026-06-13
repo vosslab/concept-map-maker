@@ -9,7 +9,7 @@ and directed arrows carry verb phrases ("concept maps --organize--> ideas"). Thi
 in the browser with no install, no account, and no backend. Students enter rows in a
 spreadsheet-like triples table (This concept | verb phrase | points to this concept); the app
 auto-generates an SVG map using dagre auto-layout, colors bubbles by graph distance from origin
-bubbles, validates the assignment rubric live (30+ bubbles, 10 definitions of difficult words), and
+bubbles, validates the assignment rubric live (30+ unique concepts, a verb phrase on every arrow), and
 saves work automatically in localStorage. Exports include PNG, SVG, JSON, CSV, and print. The app
 is in active development.
 

@@ -12,6 +12,11 @@
   --to-tint: #ffe2b8;
   --to-accent: #e8990a;
 
+  /* Active-concept "same" highlight: soft green, distinct from from/to.
+     Used by the per-cell triple-table highlighting (cell-same). */
+  --same-tint: #cdebcb;
+  --same-accent: #3a9d3a;
+
   /* Layout constants */
   --toolbar-height: 48px;
   --rubric-height: 140px;
@@ -19,6 +24,25 @@
   --gap: 8px;
   --pad: 12px;
   --radius: 4px;
+
+  /* Ribbon toolbar rhythm tokens (single source of truth for even spacing).
+     btn-gap   = gap between buttons WITHIN a group (tight, one family).
+     group-gap = gap BETWEEN ribbon groups (looser, separates clusters).
+     btn-radius = corner radius for the group PANEL frame (always modest, intentionally
+     NOT the same as --control-radius so panel frames stay understated). */
+  --ribbon-btn-gap: 4px;
+  --ribbon-group-gap: 14px;
+  --ribbon-btn-radius: 5px;
+
+  /* Pane resizer width: the draggable divider between editor and map pane.
+     The element is wider than its visual hairline so the hit area is comfortable. */
+  --resizer-width: 8px;
+
+  /* UI control corner radius: classic Mac rounded rect (5px), applied to every
+     interactive control (toolbar buttons, title input, table cell inputs, add/delete/
+     chain buttons). --control-pad-x is horizontal padding for those controls. */
+  --control-radius: 5px;
+  --control-pad-x: 9px;
 
   /* Typography */
   --font-stack: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
@@ -28,7 +52,8 @@
   --color-border: #d0d0d0;
   --color-heading: #222222;
   --color-muted: #666666;
-  --color-tab-active: #1a73e8;
+  /* text color used by toolbar inputs and buttons */
+  --color-text: #222222;
 }
 
 /* ============================================================
@@ -61,7 +86,9 @@ body {
    ============================================================ */
 .app-shell {
   display: grid;
-  grid-template-rows: var(--toolbar-height) 1fr var(--rubric-height);
+  /* Toolbar row auto-grows to fit the ribbon panels (caption + button row)
+     instead of clipping them at a fixed 48px; --toolbar-height is the floor. */
+  grid-template-rows: minmax(var(--toolbar-height), auto) 1fr var(--rubric-height);
   grid-template-columns: 1fr;
   height: 100%;
   gap: 0;
@@ -73,16 +100,20 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  padding: 0 var(--pad);
+  /* vertical padding gives the ribbon panels room to breathe above/below */
+  padding: 6px var(--pad);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   gap: var(--gap);
 }
 
+/* Deliberate row arrangement: title input at the far left, the four ribbon
+   groups as a left-aligned cluster, autosave pushed to the far right. All
+   items align to a common bottom edge so captions sit above one baseline. */
 .toolbar-content {
   display: flex;
-  align-items: center;
-  gap: var(--gap);
+  align-items: flex-end;
+  gap: var(--ribbon-group-gap);
   width: 100%;
   flex-wrap: wrap;
 }
@@ -91,12 +122,15 @@ body {
   font-size: 14px;
   font-weight: 600;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 2px 6px;
+  /* border-radius uses --control-radius (classic Mac rounded rect, 5px) */
+  border-radius: var(--control-radius);
+  padding: 4px var(--control-pad-x);
   background: var(--color-bg);
   color: var(--color-text);
   min-width: 160px;
   max-width: 280px;
+  /* sits level with the ribbon button row, not the taller group panels */
+  margin-bottom: 2px;
 }
 
 .toolbar-title-input:focus {
@@ -106,9 +140,10 @@ body {
 
 .toolbar-btn {
   font-size: 13px;
-  padding: 4px 10px;
+  padding: 4px var(--control-pad-x);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  /* border-radius uses --control-radius (classic Mac rounded rect, 5px) */
+  border-radius: var(--control-radius);
   background: var(--color-surface);
   color: var(--color-text);
   cursor: pointer;
@@ -119,6 +154,11 @@ body {
   background: var(--color-border);
 }
 
+.toolbar-btn:focus-visible {
+  outline: 2px solid var(--from-accent);
+  outline-offset: 1px;
+}
+
 .toolbar-btn-danger {
   color: #c0392b;
 }
@@ -127,6 +167,9 @@ body {
   font-size: 11px;
   color: var(--color-muted);
   white-space: nowrap;
+  /* pushed to the far right of the bar, level with the button row */
+  margin-left: auto;
+  margin-bottom: 4px;
 }
 
 .toolbar-open-error {
@@ -149,14 +192,81 @@ body {
   line-height: 1.2;
 }
 
+/* ribbon toolbar ============================================== */
+
+/* Each semantic group in the ribbon toolbar: a raised panel holding a caption
+   on top and a single horizontal row of buttons below. All four panels share
+   identical padding so they read as one family; the panel border is the only
+   separator between groups (no ad-hoc dividers), and --ribbon-group-gap on the
+   toolbar-content flex sets the uniform space between panels.
+   Uses --ribbon-btn-radius (always modest) so panel frames stay understated. */
+.toolbar-group {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ribbon-btn-radius);
+  padding: 3px 6px 5px 6px;
+  background: var(--color-surface);
+  gap: 3px;
+  position: relative;
+}
+
+/* Caption label centered above each group's button row. Uniform typography and
+   spacing across all four groups so the captions sit on one line. */
+.toolbar-group-caption {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1.2;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 1px;
+}
+
+/* The horizontal button row inside a group. --ribbon-btn-gap keeps a single,
+   consistent space between sibling buttons (one family). */
+.toolbar-group-buttons {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: var(--ribbon-btn-gap);
+}
+
+/* Buttons inside a ribbon group: icon + label, equal height, consistent
+   padding and icon-to-label gap so every button feels uniform.
+   Horizontal padding follows --control-pad-x. */
+.toolbar-group .toolbar-btn {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px var(--control-pad-x);
+}
+
+/* Ribbon icon sizing: constrained so icons sit beside text cleanly. */
+.toolbar-group .toolbar-btn .fa-solid {
+  font-size: 13px;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 /* ============================================================
    Main area: editor (left) + map (right)
+   The resizer element provides the only visual separation between panes, so
+   gap is 0; padding provides the inset from the shell edges.
    ============================================================ */
 .main-area {
   display: flex;
   flex-direction: row;
   overflow: hidden;
-  gap: var(--gap);
+  gap: 0;
   padding: var(--gap);
 }
 
@@ -173,43 +283,6 @@ body {
   overflow: hidden;
 }
 
-/* Tab bar */
-.tab-bar {
-  display: flex;
-  flex-direction: row;
-  border-bottom: 2px solid var(--color-border);
-  padding: 0 var(--pad);
-  gap: 0;
-}
-
-.tab {
-  padding: 8px 16px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: var(--font-stack);
-  font-size: var(--font-size-base);
-  color: var(--color-muted);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-}
-
-.tab:hover {
-  color: var(--color-heading);
-}
-
-.tab-active {
-  color: var(--color-tab-active);
-  border-bottom-color: var(--color-tab-active);
-  font-weight: 600;
-}
-
-/* Tab panels */
-[role="tabpanel"] {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--pad);
-}
 
 /* ============================================================
    Map pane (~60% remaining width)
@@ -260,7 +333,8 @@ body {
   font-size: 12px;
   padding: 2px 4px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  /* border-radius uses --control-radius (classic Mac rounded rect, 5px) */
+  border-radius: var(--control-radius);
   background: var(--color-surface);
 }
 
@@ -296,6 +370,11 @@ body {
   flex-direction: column;
   gap: 4px;
   padding: var(--pad);
+  /* Commit-time autosize column widths (set by triples_table.tsx). Default to
+     the 6em floor so columns sit at minimum before the first measurement. */
+  --col-from: 6em;
+  --col-verb: 6em;
+  --col-to: 6em;
 }
 
 .triples-meta {
@@ -304,10 +383,34 @@ body {
   padding: 2px 0 4px 0;
 }
 
-/* Header row: sentence-shaped column labels */
+/* Commit-time column autosize.
+   --col-from / --col-verb / --col-to are set in pixels by triples_table.tsx
+   from the widest COMMITTED value in each column (canvas measureText). Each
+   text column track is minmax(committed-min, 1fr):
+   - The MIN side is clamp(6em floor, measured px, 45% pane cap): the 6em floor
+     keeps short columns usable, the measured px keeps a column never smaller
+     than its widest committed value (autosize preserved), and 45% is the pane
+     cap (a pane resize re-clamps every column with zero JS, criterion 5).
+   - The MAX side is 1fr: the three text columns SHARE leftover pane width
+     equally instead of dumping it into one dead trailing spacer. This makes the
+     inter-column gap rhythm even and intentional (the prior trailing
+     minmax(0,1fr) spacer pooled all slack on the right, which read as an uneven
+     dead gap). Growth is static (depends only on available width, never on the
+     --col-* vars), so a draft keystroke -- which does not touch --col-* -- never
+     resizes a column (criterion 2, no-jitter preserved).
+   The vars default to 6em so columns sit at the floor before first measure.
+   The transition animates width changes over 150ms (criterion 3); it is set on
+   both .triples-header and .triple-row so header columns track body columns
+   (criterion 6). Arrows are a fixed 1.5em centered track so both arrow gaps
+   match; the delete/chain buttons sit in a snug auto block at the right edge,
+   aligned across every row. There is no trailing spacer track. */
 .triples-header {
   display: grid;
-  grid-template-columns: 1fr auto 1fr auto 1fr auto;
+  grid-template-columns:
+    minmax(clamp(6em, var(--col-from), 45%), 1fr) 1.5em
+    minmax(clamp(6em, var(--col-verb), 45%), 1fr) 1.5em
+    minmax(clamp(6em, var(--col-to), 45%), 1fr) auto auto;
+  transition: grid-template-columns 150ms ease;
   align-items: center;
   gap: 4px;
   font-size: 11px;
@@ -328,10 +431,17 @@ body {
   color: var(--color-muted);
 }
 
-/* Each data row mirrors the header grid */
+/* Each data row mirrors the header grid (same clamp tracks, same transition)
+   so header columns and body columns always stay aligned (criterion 6).
+   Row height is constant: the proposition preview has moved out of the row
+   into .triple-preview-slot below the rows list. */
 .triple-row {
   display: grid;
-  grid-template-columns: 1fr auto 1fr auto 1fr auto;
+  grid-template-columns:
+    minmax(clamp(6em, var(--col-from), 45%), 1fr) 1.5em
+    minmax(clamp(6em, var(--col-verb), 45%), 1fr) 1.5em
+    minmax(clamp(6em, var(--col-to), 45%), 1fr) auto auto;
+  transition: grid-template-columns 150ms ease;
   align-items: center;
   gap: 4px;
   position: relative;
@@ -341,9 +451,35 @@ body {
   width: 100%;
   padding: 4px 6px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  /* border-radius uses --control-radius (classic Mac rounded rect, 5px) */
+  border-radius: var(--control-radius);
   font-size: 13px;
   font-family: inherit;
+  box-sizing: border-box;
+  /* Content past the 45% cap ellipsizes: the verb <input> scrolls its caret on
+     focus natively; the full value is exposed via the title attribute. Inputs
+     do not honor text-overflow themselves, so min-width:0 lets the grid track
+     do the clamping and the input scroll its overflow (criterion 4). */
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+/* From/to cells wrap a ConceptAutocomplete (inner span + input). Make that inner
+   span and its input fill the cell width and shrink to 0 so the clamp/minmax
+   grid track controls the column width, not the input's intrinsic size. Only
+   the box sizing is constrained here; the input keeps its existing visual
+   treatment (border/background) so a11y cues stay intact. */
+.triple-cell-from > span,
+.triple-cell-to > span {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.triple-cell-from input,
+.triple-cell-to input {
+  width: 100%;
+  min-width: 0;
   box-sizing: border-box;
 }
 
@@ -363,14 +499,20 @@ body {
   user-select: none;
 }
 
+/* Delete + chain form a snug, fixed-width button block at the right edge.
+   Both buttons share width (1.9em), padding, and --control-radius so the
+   right-side control block stays identical and aligned on every row. */
 .triple-delete-btn {
+  width: 1.9em;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  /* border-radius uses --control-radius (classic Mac rounded rect, 5px) */
+  border-radius: var(--control-radius);
   color: var(--color-muted);
   cursor: pointer;
-  font-size: 12px;
-  padding: 2px 6px;
+  font-size: 13px;
+  padding: 2px 0;
+  text-align: center;
   line-height: 1;
 }
 
@@ -380,9 +522,39 @@ body {
   color: #b00000;
 }
 
-/* Proposition preview: shown below the focused row */
-.triple-preview {
-  grid-column: 1 / -1;
+/* Chain button: insert a new row below with from = this row's to.
+   Placed after the delete button in the grid. */
+.triple-chain-btn {
+  width: 1.9em;
+  background: transparent;
+  border: 1px solid transparent;
+  /* border-radius uses --control-radius (classic Mac rounded rect, 5px) */
+  border-radius: var(--control-radius);
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 0;
+  text-align: center;
+  line-height: 1;
+}
+
+.triple-chain-btn:hover:not(:disabled) {
+  border-color: var(--color-border);
+  background: var(--to-tint);
+  color: var(--to-accent);
+}
+
+.triple-chain-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Fixed-height preview slot rendered below the rows list.
+   Always occupies its height so the "+ Add row" button never jumps when a
+   row gains or loses focus. Shows the focused row's proposition sentence or
+   an empty string. The min-height reserves space even when empty. */
+.triple-preview-slot {
+  min-height: 1.4em;
   font-size: 12px;
   color: var(--color-muted);
   padding: 2px 4px;
@@ -392,16 +564,23 @@ body {
 .triples-add-btn {
   align-self: flex-start;
   margin-top: 4px;
-  padding: 4px 10px;
+  /* horizontal padding follows --control-pad-x */
+  padding: 4px var(--control-pad-x);
   font-size: 12px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  /* border-radius uses --control-radius (classic Mac rounded rect, 5px) */
+  border-radius: var(--control-radius);
   background: transparent;
   cursor: pointer;
 }
 
 .triples-add-btn:hover {
   background: var(--from-tint);
+}
+
+.triples-add-btn:focus-visible {
+  outline: 2px solid var(--from-accent);
+  outline-offset: 1px;
 }
 
 /* ============================================================
@@ -461,56 +640,6 @@ body {
     display: block;
   }
 
-  /* Definitions panel: force visible even when Triples tab is active.
-     The [hidden] attribute sets display:none; override it here so the
-     definitions always appear below the map regardless of active tab. */
-  #panel-definitions {
-    display: block !important;
-    overflow: visible;
-    height: auto;
-    padding: 0;
-    margin-top: 16px;
-    page-break-before: auto;
-  }
-
-  /* Hide the Triples panel in print (definitions only) */
-  #panel-triples {
-    display: none !important;
-  }
-
-  /* Definitions heading */
-  #panel-definitions .pane-heading {
-    font-size: 14px;
-    color: #000000;
-    margin-bottom: 8px;
-    page-break-after: avoid;
-  }
-
-  /* Definitions table: flowing layout, black text */
-  .definitions-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-    color: #000000;
-  }
-
-  .definitions-table th,
-  .definitions-table td {
-    border: 1px solid #888888;
-    padding: 4px 8px;
-    text-align: left;
-    vertical-align: top;
-  }
-
-  .definitions-table th {
-    background: #e8e8e8;
-    font-weight: 700;
-  }
-
-  /* Suppress tab bar (already hidden via editor-pane, but be explicit) */
-  .tab-bar {
-    display: none !important;
-  }
 }
 
 /* ============================================================
@@ -605,3 +734,121 @@ body {
   box-shadow: inset 3px 0 0 0 var(--from-accent);
   border-radius: var(--radius);
 }
+
+/* ============================================================
+   Three-color per-cell active-concept highlighting
+   Clicking/hovering a from/to cell activates that cell's concept. Related
+   cells light up in three tints relative to the active concept:
+     - cell-same: this cell IS the active concept (green).
+     - cell-from: this cell points INTO the active concept (blue, from family).
+     - cell-to:   the active concept points OUT to this cell (amber, to family).
+   The classes live on the outer .triple-cell span; the inner ConceptAutocomplete
+   wrapper span carries a static inline tint, so we make it transparent here and
+   paint the highlight on the outer span. A left accent bar plus a soft tint
+   keeps WCAG AA contrast for the dark input text on every tint.
+   These classes compose with .triple-row.highlighted (row-level map highlight)
+   without conflict: that paints the row background, these paint the cells.
+   ============================================================ */
+
+/* When a role class is active, let the cell highlight show through the inner
+   autocomplete wrapper span's static inline tint. */
+.triple-cell.cell-from > span,
+.triple-cell.cell-to > span,
+.triple-cell.cell-same > span {
+  background: transparent !important;
+}
+
+/* Keep the input itself transparent so the outer cell tint is visible, and keep
+   the text dark for AA contrast against the soft tints. */
+.triple-cell.cell-from input,
+.triple-cell.cell-to input,
+.triple-cell.cell-same input {
+  background: transparent;
+  color: #1a1a1a;
+}
+
+/* cell-from: solid left border (source role) */
+.triple-cell.cell-from {
+  background: var(--from-tint);
+  border-left: 3px solid var(--from-accent);
+  border-radius: var(--control-radius);
+}
+
+/* cell-to: dashed left border (destination role) */
+.triple-cell.cell-to {
+  background: var(--to-tint);
+  border-left: 3px dashed var(--to-accent);
+  border-radius: var(--control-radius);
+}
+
+/* cell-same: double left border (identity role) */
+.triple-cell.cell-same {
+  background: var(--same-tint);
+  border-left: 3px double var(--same-accent);
+  border-radius: var(--control-radius);
+}
+
+/* ============================================================
+   resizer
+   Vertical drag handle between .editor-pane and .map-pane.
+   The draggable element sits between the two flex children of
+   .main-area. Its width is intentionally wider than its visible
+   hairline so the hit area is comfortable to grab.
+   ============================================================ */
+
+/* --resizer-width is declared in the main :root token block at the top of this file. */
+
+.pane-resizer {
+  /* Takes up its own slot in the flex row; does not stretch siblings. */
+  flex: 0 0 var(--resizer-width);
+  width: var(--resizer-width);
+  /* Vertically fills the main-area. */
+  align-self: stretch;
+  cursor: col-resize;
+  position: relative;
+  /* Transparent background so the hairline pseudo-element shows through. */
+  background: transparent;
+  /* Remove default outline; use :focus-visible instead. */
+  outline: none;
+  border: none;
+  padding: 0;
+  /* Prevent the divider itself from being text-selected. */
+  user-select: none;
+}
+
+/* Visible hairline: centered inside the wider hit zone. */
+.pane-resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  background: var(--color-border);
+  border-radius: 1px;
+  transition: background 0.15s;
+}
+
+.pane-resizer:hover::before,
+.pane-resizer:focus-visible::before {
+  background: var(--from-accent);
+}
+
+/* R-3: explicit focus outline so the 2px hairline alone is not the only cue.
+   outline-offset: 0 keeps it flush with the hit area. */
+.pane-resizer:focus-visible {
+  outline: 2px solid var(--from-accent);
+  outline-offset: 0;
+}
+
+/* While dragging: keep hair highlighted and suppress text selection globally. */
+.pane-resizer--dragging::before {
+  background: var(--from-accent);
+}
+
+body.resizer-active {
+  user-select: none;
+  cursor: col-resize;
+}
+

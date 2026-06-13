@@ -17,9 +17,7 @@ interface RubricPanelProps {
 function level_marker(level: ValidationItem["level"]): string {
   if (level === "pass") return "OK";
   if (level === "warn") return "WARN";
-  if (level === "fail") return "FAIL";
-  // hint level
-  return "HINT";
+  return "FAIL";
 }
 
 // ============================================

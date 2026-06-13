@@ -1,11 +1,16 @@
 # Plan: Concept Map Maker web app (SolidJS + TypeScript)
 
+> **Note (2026-06-12):** The definitions feature was removed per user decision. All
+> references to definitions below reflect the original plan scope and are now stale.
+> The current data model (`src/types.ts`) contains only triples and layout; no
+> `Definition` type or `definitions` field exists. `src/definitions_table.tsx` was
+> deleted. The rubric no longer requires 10 definitions.
+
 ## Context
 
 Students in life-science courses must build concept maps: bubbles holding a single 1-3 word
 concept (noun), connected by directed arrows labeled with verb phrases (proposition pedagogy:
-"concept maps --organize--> ideas"). Assignment rubric: minimum 30 bubbles and 10 definitions of
-difficult words. Today there is no tool; this repo (freshly reset starter-template scaffold,
+"concept maps --organize--> ideas"). Assignment rubric: minimum 30 bubbles. [Definitions requirement removed 2026-06-12.] Today there is no tool; this repo (freshly reset starter-template scaffold,
 `REPO_TYPE=typescript`) will become a static browser-only web app deployed to GitHub Pages.
 Students enter data in a spreadsheet-like triples table; the app auto-generates the SVG map.
 A confirmed pain point: students struggle with From/To direction, so the editor must make
@@ -27,7 +32,7 @@ origin bubbles (origin = no incoming edges, only outgoing), origins visually emp
 
 ## Objectives
 
-- Students produce a rubric-compliant concept map (30+ bubbles, 10 definitions) entirely in the browser with no install and no account.
+- Students produce a rubric-compliant concept map (30+ bubbles) entirely in the browser with no install and no account. [Definitions requirement removed 2026-06-12.]
 - Direction errors are rare: every affordance (headers, tints, preview sentence, hover highlight) reinforces From -> verb -> To.
 - Work is portable and submittable: JSON/CSV file round-trip, PNG/SVG export, print, autosave.
 - Repo gates stay green: `npx tsc --noEmit`, `check_codebase.sh`, node unit tests on all pure modules.
@@ -44,7 +49,7 @@ symptom").
 
 ## Scope
 
-- Build the SolidJS app under `src/` (snake_case files): triples editor, definitions editor, SVG map canvas with drag, rubric panel, toolbar.
+- Build the SolidJS app under `src/` (snake_case files): triples editor, SVG map canvas with drag, rubric panel, toolbar. [Definitions editor removed 2026-06-12.]
 - Implement themes (3 bubble shapes, 2+ palettes) and depth-from-origin bubble coloring with origin emphasis.
 - Implement exports: SVG, PNG, versioned JSON save/load, CSV import/export, localStorage autosave, print CSS.
 - Stand up build tooling: `pipeline/build.mjs` (esbuild JS API + solid plugin + watch/serve), adapted `build_github_pages.sh`, tsconfig/eslint Solid deltas, package.json instantiation.
@@ -73,11 +78,12 @@ Data model (shared contract, `src/types.ts`):
 
 ```ts
 interface Triple { id: string; from: string; verb: string; to: string }
-interface Definition { id: string; word: string; definition: string }
+// Definition interface removed 2026-06-12; definitions feature was removed.
 type ConceptKey = string  // normalized: trim, collapse ws, lowercase; display = first casing
 interface CmapDocument {
   format: "concept-map-maker"; version: 1; title: string;
-  triples: Triple[]; definitions: Definition[];
+  triples: Triple[];
+  // definitions field removed 2026-06-12.
   overrides: Record<ConceptKey, {x: number; y: number}>;
   theme: { shape: "rounded" | "rect" | "oval"; palette: "earth" | "fire" };
 }
@@ -101,11 +107,10 @@ requirements unless noted):
   `graph_depth.ts` tests.
 - Empty rows: fully blank rows ignored everywhere; partially filled rows (missing from/verb/to)
   excluded from graph derivation and flagged as a validation warning.
-- CSV scope: CSV import/export covers the triples table only in v1 (header
+- CSV scope: CSV import/export covers the triples table only (header
   `this concept,verb phrase,points to this concept`). JSON is the full project save format
-  (triples + definitions + overrides + theme + title). Definitions table still accepts paste.
-- Definitions linkage: definitions are independent of the graph in v1; validation warns when a
-  defined word does not appear in any concept label or verb phrase. No auto-highlight in v1.
+  (triples + overrides + theme + title).
+- Definitions linkage: [removed 2026-06-12; definitions feature was removed entirely.]
 - Autosave: single localStorage slot. Opening a JSON file replaces the working document and the
   autosave slot immediately; toolbar shows current document title so the active document is
   visible.
@@ -116,9 +121,7 @@ requirements unless noted):
   it is the single source for SVG viewBox, PNG raster bounds, and print sizing.
 - Rubric unit: the 30-bubble rule is "at least 30 unique concepts" - normalized duplicates
   count once.
-- Definitions-word check ("defined word appears nowhere in map text") is a low-severity hint
-  level, separate from warn/fail, and never makes the rubric panel look incomplete (valid
-  glossary entries may not match a label).
+- Definitions-word check: [removed 2026-06-12; definitions feature was removed entirely.]
 - Palette ramps clamp at 6 depth levels (no cycling - distant nodes must not look shallow);
   encoded in `themes.ts` tests.
 - Accessibility: From/To direction cues never rely on color alone - headers, arrow glyphs, and
@@ -134,9 +137,9 @@ Pure modules (no Solid, node-testable): `types.ts`, `derive_concepts.ts`, `graph
 bidirectional-pair bowing; self-loop arcs; label anchor).
 
 Solid components: `app_state.ts` (only stateful module), `main.tsx`, `app.tsx`, `toolbar.tsx`,
-`triples_table.tsx`, `triple_row.tsx`, `concept_autocomplete.tsx`, `definitions_table.tsx`,
+`triples_table.tsx`, `triple_row.tsx`, `concept_autocomplete.tsx`,
 `map_canvas.tsx`, `concept_node.tsx`, `concept_edge.tsx`, `rubric_panel.tsx`,
-`theme_picker.tsx`. Dependency direction: components -> app_state -> pure modules -> types.
+`theme_picker.tsx`. [`definitions_table.tsx` removed 2026-06-12.] Dependency direction: components -> app_state -> pure modules -> types.
 
 Export pipeline: all SVG presentation inline (attributes, web-safe font stack), so export =
 clear hover, clone `<svg>`, strip interaction attrs and pan/zoom transform, set viewBox from
@@ -283,7 +286,8 @@ Wave 5 (integration): B3, D2b2, D2b3, D2b4, then D3a, D3b.
 ### Work package: WP-A2c validation rules
 
 - Owner: coder
-- Touch points: `src/validate_document.ts` (rule "at least 30 unique concepts" - normalized duplicates count once; every arrow has verb; <=3-word labels warn; >=10 non-empty definitions; orphans; partial rows; duplicate triples; self-loops; near-miss spellings edit-distance 1; hint-level "defined word absent from map text" - hint severity, separate from warn/fail), `tests/test_validate_document.mjs`
+- Touch points: `src/validate_document.ts` (rule "at least 30 unique concepts" - normalized duplicates count once; every arrow has verb; <=3-word labels warn; orphans; partial rows; duplicate triples; self-loops; near-miss spellings edit-distance 1), `tests/test_validate_document.mjs`
+  [Definitions-related rules (min 10 definitions, defined word absent hint) removed 2026-06-12.]
 - Depends on: WP-A1
 - Acceptance criteria: each rule has fixture coverage across its severity levels (pass/warn/fail/hint).
 - Verification commands: `node --import tsx --test tests/test_validate_document.mjs`
@@ -361,20 +365,19 @@ Wave 5 (integration): B3, D2b2, D2b3, D2b4, then D3a, D3b.
 - Verification commands: `bash check_codebase.sh`; keyboard cases (arrow/enter/tab/escape/blur) are explicit specs in WP-D3a Playwright.
 - Obvious follow-ons: wire into triple_row cells; changelog.
 
-### Work package: WP-B2c definitions table
+### Work package: WP-B2c definitions table [removed 2026-06-12]
 
-- Owner: coder
-- Touch points: `src/definitions_table.tsx` (word/definition grid, same nav behavior, paste support)
-- Depends on: WP-B1a, WP-B1b
-- Acceptance criteria: 10-row entry works; count feeds validation.
-- Verification commands: `bash check_codebase.sh`
-- Obvious follow-ons: changelog.
+- **This work package is obsolete.** `src/definitions_table.tsx` was deleted; the
+  definitions feature was removed per user decision on 2026-06-12.
+- Original owner: coder
+- Original touch points: `src/definitions_table.tsx` (word/definition grid, paste support)
 
 ### Work package: WP-B2d spreadsheet paste import
 
 - Owner: coder
-- Touch points: paste handler in `src/triples_table.tsx` and `src/definitions_table.tsx` wiring `csv_codec.parse_table_text` into bulk row insert at focus
-- Depends on: WP-A3, WP-B2a, WP-B2c
+- Touch points: paste handler in `src/triples_table.tsx` wiring `csv_codec.parse_table_text` into bulk row insert at focus.
+  [`src/definitions_table.tsx` paste handler removed 2026-06-12 with the definitions feature.]
+- Depends on: WP-A3, WP-B2a
 - Acceptance criteria: pasting 30-row TSV from real spreadsheet creates 30 rows.
 - Verification commands: `bash check_codebase.sh`; manual paste from Google Sheets.
 - Obvious follow-ons: changelog.
@@ -463,9 +466,10 @@ Wave 5 (integration): B3, D2b2, D2b3, D2b4, then D3a, D3b.
 ### Work package: WP-D2c print stylesheet
 
 - Owner: coder
-- Touch points: `@media print` rules in `src/style.css` (map + definitions table, hide editor/toolbar)
+- Touch points: `@media print` rules in `src/style.css` (map only, hide editor/toolbar)
+  [Definitions table removed from print scope 2026-06-12.]
 - Depends on: WP-B1b
-- Acceptance criteria: browser print preview shows map + definitions cleanly.
+- Acceptance criteria: browser print preview shows the map cleanly.
 - Verification commands: manual print preview; `bash check_codebase.sh`
 - Obvious follow-ons: changelog.
 

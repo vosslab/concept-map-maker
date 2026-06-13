@@ -14,13 +14,22 @@ and autosaves to localStorage. There is no backend; the production build is a st
 
 - [src/main.tsx](../src/main.tsx) - entry point; mounts the app into `#app`.
 - [src/app.tsx](../src/app.tsx) - top-level layout: toolbar, editor pane, map pane,
-  rubric panel; captures the live SVG element ref for exports.
-- [src/toolbar.tsx](../src/toolbar.tsx) - title editor, Save/Open/Clear, CSV
-  import/export, SVG/PNG export, print, and re-layout buttons.
+  rubric panel; captures the live SVG element ref for exports. Includes the
+  `<div class="pane-resizer">` divider: pointer-capture drag updates `--editor-ratio`
+  on `.main-area` (clamped 25%-65%); double-click resets to 40%; ArrowLeft/ArrowRight
+  nudge by 2%; ratio persists to `localStorage["concept-map-maker:editor-ratio"]`. Also
+  owns the corner-style preset: loads `localStorage["concept-map-maker:corner-style"]`
+  on mount, applies `data-corners` attribute to `<html>`, and handles preset changes
+  via a dropdown in the Layout toolbar group (four presets: Capsule, Oval, Rounded rect, Corner rect).
+- [src/toolbar.tsx](../src/toolbar.tsx) - ribbon toolbar with four labeled groups (File,
+  CSV, Image & Print, Layout). Each button carries a Font Awesome solid glyph
+  (`aria-hidden="true"`) plus a text label. Icons are served from the vendored
+  `vendor/fontawesome/` assets (fa-solid.min.css + fa-solid-900.woff2); no CDN
+  dependency. `build_github_pages.sh` copies `vendor/fontawesome/` into `dist/` and
+  asserts `dist/vendor/fontawesome/fa-solid-900.woff2` exists before reporting success.
 - [src/triples_table.tsx](../src/triples_table.tsx) and
   [src/triple_row.tsx](../src/triple_row.tsx) - spreadsheet UI for triples, including
   paste-from-Excel handling.
-- [src/definitions_table.tsx](../src/definitions_table.tsx) - word/definition glossary table.
 - [src/rubric_panel.tsx](../src/rubric_panel.tsx) - live rubric checklist; clicking a row
   flashes the first offending element.
 - [src/concept_autocomplete.tsx](../src/concept_autocomplete.tsx) - concept-label
@@ -39,11 +48,14 @@ and autosaves to localStorage. There is no backend; the production build is a st
 ### State
 
 - [src/app_state.ts](../src/app_state.ts) - central reactive store. Holds the
-  `CmapDocument` store (title, triples, definitions, drag overrides, theme), an ephemeral
+  `CmapDocument` store (title, triples, drag overrides, theme), an ephemeral
   hover signal, derivation memos, mutation actions, and a debounced (500 ms) autosave
-  effect that writes to localStorage.
-- [src/types.ts](../src/types.ts) - shared type contracts (`Triple`, `Definition`,
-  `CmapDocument`, `ConceptKey` normalizer, `ValidationItem`, themes).
+  effect that writes to localStorage. Also exposes the per-cell active-concept
+  highlighting API: `active_concept` (focus wins over hover), `cell_classification`
+  (one `Map<ConceptKey, CellRole>` per active-concept change), `set_cell_focus` /
+  `set_cell_hover`, `focused_concept`, and the `CellRole` type ("same" / "from" / "to").
+- [src/types.ts](../src/types.ts) - shared type contracts (`Triple`, `CmapDocument`,
+  `ConceptKey` normalizer, `ValidationItem`, themes).
 
 ### Pure derivation modules (no Solid imports, node-testable)
 
@@ -54,10 +66,13 @@ and autosaves to localStorage. There is no backend; the production build is a st
 - [src/graph_depth.ts](../src/graph_depth.ts) - BFS depth from origin concepts (drives
   bubble coloring).
 - [src/validate_document.ts](../src/validate_document.ts) - rubric checks (complete
-  triples, definition links, isolated concepts, typo hints).
+  triples, isolated concepts, typo hints).
 - [src/edge_geometry.ts](../src/edge_geometry.ts) - curved edge paths and arrowhead geometry.
 - [src/map_bounds.ts](../src/map_bounds.ts) - bounding box for viewBox and export sizing.
-- [src/themes.ts](../src/themes.ts) - theme definitions.
+- [src/themes.ts](../src/themes.ts) - theme color palettes and shapes.
+- [src/measure_text.ts](../src/measure_text.ts) - pixel-accurate text width measurement
+  via a shared offscreen canvas context. Used by the triples table to autosize each column
+  to the widest committed value at commit time (not per keystroke).
 
 ### Codecs and export
 

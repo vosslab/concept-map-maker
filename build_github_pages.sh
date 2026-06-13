@@ -67,4 +67,32 @@ node pipeline/build.mjs
 test -f dist/index.html
 test -f dist/main.js
 
+# Copy vendored Font Awesome assets so the ribbon toolbar icons load offline.
+mkdir -p dist/vendor/fontawesome
+cp vendor/fontawesome/fa-solid.min.css dist/vendor/fontawesome/
+cp vendor/fontawesome/fa-solid-900.woff2 dist/vendor/fontawesome/
+cp vendor/fontawesome/LICENSE.txt dist/vendor/fontawesome/
+
+# Hard assertion: build fails if the font file is missing from dist/.
+test -f dist/vendor/fontawesome/fa-solid-900.woff2 || {
+  echo "ERROR: dist/vendor/fontawesome/fa-solid-900.woff2 missing after copy." >&2
+  exit 1
+}
+
+# Hard assertion: build fails if the icon CSS is missing from dist/.
+test -f dist/vendor/fontawesome/fa-solid.min.css || {
+  echo "ERROR: dist/vendor/fontawesome/fa-solid.min.css missing after copy." >&2
+  exit 1
+}
+
+# Hard assertion: the vendored @font-face src must use a valid CSS format()
+# hint. A backslash-escaped variant (format(\"woff2\")) is a JSON/JS
+# string-escaping artifact that makes the whole @font-face rule a parse
+# error, so the font never loads and every toolbar glyph renders as tofu.
+if grep -q 'format(\\"woff2\\")' dist/vendor/fontawesome/fa-solid.min.css; then
+  echo "ERROR: fa-solid.min.css has a corrupt @font-face format() hint" >&2
+  echo "  (backslash-escaped quotes). Re-vendor the file without escaping." >&2
+  exit 1
+fi
+
 echo "Built dist/ (GitHub Pages-ready)."

@@ -4,6 +4,114 @@
 
 ### Additions and New Features
 
+- Corner-style select in the toolbar Layout group: a "Corners" dropdown offers four presets --
+  Capsule (pill, 999px), Oval (elliptical, 50% --control-radius), Rounded rect (classic 5px),
+  Corner rect (sharp 0px). Replaces the prior two-state toggle button.
+  Introduces `--control-radius` and `--control-pad-x` CSS tokens consumed by toolbar buttons,
+  title input, triples-table cell inputs, add/delete/chain buttons, and the theme-picker select.
+  Four `data-corners` presets on `<html>` (`capsule` / `oval` / `rounded` / `corner`) drive the
+  token values; capsule and oval bump horizontal padding so short labels do not pinch. Choice
+  persisted to localStorage under `"concept-map-maker:corner-style"`, validated on load
+  (unknown/legacy values -> rounded), applied in `onMount` before first paint. Playwright spec
+  `tests/playwright/corner_style.spec.ts` asserts all four attribute values, computed
+  border-radius changes, and persistence across a page reload. Non-control radii (editor pane,
+  map pane, row-highlight background) remain on `--radius` unchanged.
+
+- WP-A2 commit-time column autosize: the three triples-table text columns (from,
+  verb, to) now size to the widest COMMITTED value in each column, measured with
+  pixel-accurate canvas `measureText` (new helper `src/measure_text.ts`). The
+  measured widths are written to `--col-from` / `--col-verb` / `--col-to` custom
+  properties on `.triples-table`; the grid tracks read them as
+  `minmax(6em, min(var(--col-X), 45%))`, so the 6em floor and 45% pane cap live in
+  CSS and a pane resize re-clamps every column with zero JS (criterion 5). Width
+  changes animate over 150ms (`transition: grid-template-columns`), and the header
+  and body share the same template so columns stay aligned (criterion 6). Recompute
+  is commit-gated: from/to read the store directly (their autocomplete commits only
+  on Enter/Tab/blur), and the verb (a plain input that writes the store per
+  keystroke for the live preview) reads a separate snapshot refreshed only on verb
+  blur/Enter and on row add/delete/import, so draft keystrokes never resize a column
+  (criterion 2). Cells whose content exceeds the cap ellipsize, and the full value
+  is exposed via a new `title` attribute on each cell (criterion 4). New Playwright
+  spec `tests/playwright/column_autosize.spec.ts` asserts a committed long verb
+  phrase widens the verb column while from/to keep their floor, and that typing
+  without committing does not resize any column.
+
+- WP-B1: Three-color per-cell triple-table highlighting. A new "active concept"
+  drives which from/to cells light up. Focus on a from/to cell sets the active
+  concept to that cell's COMMITTED value (not draft keystrokes); hovering a cell
+  while nothing is focused sets it to the hovered value; focus always wins over
+  hover; empty cells never activate. `AppState` gains `active_concept`
+  (`Accessor<ConceptKey | null>`), `cell_classification`
+  (`Accessor<Map<ConceptKey, CellRole>>`), and `set_cell_focus` / `set_cell_hover`
+  wiring. `active_concept = focused_concept() ?? hovered_concept()` (two internal
+  signals, blank values stored as null). The pure `compute_cell_classification`
+  walks every triple once per active-concept change and builds one keyed map:
+  the active key -> `cell-same`, a from-partner pointing into it -> `cell-from`, a
+  to-partner it points out to -> `cell-to` (precedence same > from > to for
+  cycles). Each cell does a single map lookup, so this stays O(triples) per change
+  and one lookup per cell at the 80-node stress scale. `TripleRow` adds focus/hover
+  handlers on the from/to cell spans and a `classList` for the three role classes.
+  New `CellRole` type exported from `app_state.ts`. CSS: added `--same-tint`
+  (#cdebcb) and `--same-accent` (#3a9d3a) to `:root`; new labeled "WP-B1" section
+  paints the three tints with an inset accent bar on the outer `.triple-cell` span
+  (inner autocomplete wrapper tint made transparent so the highlight shows
+  through), keeping dark input text (#1a1a1a) for WCAG AA contrast. Existing
+  row-level (`.triple-row.highlighted`) and map-pane highlighting are untouched and
+  compose without conflict. New `tests/playwright/cell_highlight.spec.ts` covers
+  the worked example (honeybees->castes, castes->workers) and class clearing on
+  blur. All 20 Playwright tests pass, `npx tsc --noEmit -p tsconfig.json` exits 0,
+  `npx eslint src/` exits 0.
+
+- WP-A1: Three UX fixes for the triples table. (1) Verb column width: `.triple-row`
+  and `.triples-header` grid-template-columns changed from `1fr auto 1fr auto 1fr auto`
+  to `1fr auto minmax(9em, 1fr) auto 1fr auto auto` so multi-word verbs like "included"
+  render untruncated. (2) Stable row height: proposition preview moved out of the row
+  grid into a fixed-height `.triple-preview-slot` div rendered below the rows list by
+  `TriplesTable`; row height no longer changes on focus/blur; `+ Add row` button stays
+  in the same screen position. `TripleRow` gains `on_focus_change` prop (notifies parent
+  of focused row index) and `expose_to_commit` prop (exposes synchronous commit fn). (3)
+  Add-row synchronous commit: `+ Add row` button gains `onPointerDown` handler that
+  calls the focused row's `to`-cell commit function synchronously before the 150 ms blur
+  timer fires; the 150 ms blur timer is tracked as `blur_timer` in `ConceptAutocomplete`
+  and is cancelled when `commit()` fires synchronously (double-commit guard). (4) Chain
+  button: each row gains a `triple-chain-btn` (aria-label "Chain new row from this
+  concept", tooltip, disabled when `to` is blank) that commits the `to` draft
+  synchronously and inserts a new row directly below with `from` pre-filled from the
+  committed `to` value; `AppState` gains `insert_triple_after(after_index, triple?)`.
+  `ConceptAutocomplete` gains `expose_commit` and `on_draft_change` props. Two new
+  Playwright specs in `tests/playwright/add_row_and_chain.spec.ts` cover the add-row
+  draft-preserve scenario and chain-button disable/enable/chain behavior; all 19
+  Playwright tests pass, `npx tsc --noEmit -p tsconfig.json` exits 0,
+  `npx eslint src/triple_row.tsx src/triples_table.tsx src/concept_autocomplete.tsx`
+  exits 0.
+
+- WP-C1: Added draggable pane resizer between `.editor-pane` and `.map-pane` in
+  `src/app.tsx`. A `<div class="pane-resizer">` divider uses `setPointerCapture`
+  for smooth drag; updates `--editor-ratio` inline on `.main-area` clamped to
+  25%-65%. Ratio persists to `localStorage` under key
+  `"concept-map-maker:editor-ratio"`; missing, non-numeric, or out-of-range values
+  fall back/clamp to 40% and write the corrected value back on load. Divider carries
+  `role="separator"`, `aria-orientation="vertical"`, `tabindex="0"`;
+  ArrowLeft/ArrowRight adjust by 2%; double-click resets to 40%. Text selection
+  suppressed during drag via `user-select: none` on `body.resizer-active`. Appended
+  labeled `/* resizer */` CSS section to `src/style.css` (no other CSS modified).
+  `npx tsc --noEmit -p tsconfig.json` exits 0; `npx eslint src/app.tsx` exits 0.
+
+- WP-E1: Vendored Font Awesome Free 6.7.2 into `vendor/fontawesome/` (fa-solid.min.css,
+  fa-solid-900.woff2 at 155 KB, LICENSE.txt). Linked from `src/index.html` via a local stylesheet
+  reference only; no CDN or external runtime deps. `build_github_pages.sh` gains a vendor-copy step
+  and a hard assertion `test -f dist/vendor/fontawesome/fa-solid-900.woff2` before the success line.
+  Restyled the four semantic toolbar groups as a ribbon: each group is a raised panel with a
+  `.toolbar-group-caption` label (File, CSV, Image & Print, Layout) and icon + text per button using
+  Font Awesome solid glyphs: Save project `fa-floppy-disk`, Open project `fa-folder-open`, Clear
+  `fa-trash-can`, Export triples CSV `fa-file-export`, Import triples CSV `fa-file-import`, Export
+  SVG `fa-vector-square`, Export PNG `fa-image`, Print `fa-print`, Re-layout `fa-diagram-project`.
+  All icons are `aria-hidden="true"`; button text labels and `aria-label` attributes preserved.
+  `vendor/` excluded from all pytest hygiene scans via `REPO_HYGIENE_FILTERS` in `tests/conftest.py`.
+  Playwright spec `tests/playwright/toolbar_icons.spec.ts` added: asserts each icon has nonzero
+  width, font-family resolves to "Font Awesome 6 Free", woff2 HTTP response is 200, and screenshots
+  the toolbar ribbon for visual review.
+
 - Docset refresh: added `docs/CODE_ARCHITECTURE.md` (components, data flow, build
   pipeline, extension points), `docs/FILE_STRUCTURE.md` (directory map, generated
   artifacts, where new work goes), `docs/INSTALL.md` (setup via
@@ -12,14 +120,226 @@
   header detection, TSV paste, SVG/PNG export). Linked all four from the README
   Documentation section.
 
+- WP-D1: Added `tests/playwright/definitions_removed.spec.ts` with two tests asserting
+  that the Definitions tab button and `#panel-definitions` panel are absent from the
+  rendered app after the feature removal.
+
+- Walkthrough demo player: added `tests/playwright/walkthrough_demo.mts` (standalone
+  Playwright script, not a test spec) and `run_walkthrough_demo.sh` entry point.
+  The demo reads a triples JSON dataset (default:
+  `tests/playwright/walkthrough_data/honeybees_triples.json`, 8 honeybee triples)
+  and drives the UI like a human player with per-keystroke delay. Uses the chain
+  button when a triple's "from" matches the previous row's "to" to showcase that
+  workflow. Records Playwright video and saves per-row screenshots plus a final map
+  screenshot to `output_smoke/walkthrough/`. Arguments: `--data`, `--speed`,
+  `--headed`, `--no-video`; `--build` on the shell wrapper forces a dist/ rebuild.
+  Added `tests/**/*.mts` to `tsconfig.lint.json` so ESLint type-checked rules cover
+  the new file. Documented under "Walkthrough demo" in `docs/USAGE.md`.
+
+- Capsule map bubble shape added to the Shape picker in the map pane. Capsule is a
+  stadium shape (rect with rx = ry = node height / 2) that produces fully rounded
+  short ends. Added "capsule" to `ThemeShape` union in `src/types.ts`, `SHAPE_REGISTRY`
+  in `src/themes.ts` (new `is_capsule` flag on `ShapeSpec`; `corner_radius` stays 0
+  because rx is computed dynamically at render time from the node box height),
+  `SHAPE_LABELS` in `src/theme_picker.tsx`, and the shape gate in `src/document_codec.ts`.
+  `src/concept_node.tsx` render_shape and render_highlight_ring handle the capsule
+  branch before the rect/rounded branch. Four new tests in `tests/test_themes.mjs`
+  assert the capsule registry entry and that existing shapes have `is_capsule: false`.
+
 ### Behavior or Interface Changes
+
+- UI corner-style dropdown removed. The "Corners" dropdown (four presets: Capsule,
+  Oval, Rounded rect, Corner rect) and all its supporting code have been removed.
+  `--control-radius` and `--control-pad-x` are now static at 5px / 9px (classic Mac
+  rounded rect) with no user-facing option and no localStorage persistence. The
+  `CornerPreset` type, `load_corner_style`, `save_corner_style`, `apply_corner_style`
+  functions, `CORNER_STORAGE_KEY` constant, and `corner_style` signal are gone from
+  `src/app.tsx`; the `corner_style` and `on_corner_preset_change` props are gone from
+  `src/toolbar.tsx`. The four `data-corners` CSS preset blocks are removed from
+  `src/style.css`. `tests/playwright/corner_style.spec.ts` deleted.
+
+- Superseded the static `grid-template-columns: 1fr auto minmax(9em, 1fr) auto 1fr
+  auto auto` rule on `.triples-header` / `.triple-row` (and the fixed `minmax(9em,
+  1fr)` verb rule) in favor of the WP-A2 commit-time autosize tracks. A trailing
+  `minmax(0, 1fr)` spacer track was added so columns left-pack at the floor instead
+  of letting the arrow/button columns absorb slack.
 
 - Rewrote `AGENTS.md` as a minimal pointer file: bare-path bullets into the
   `docs/*.md` style set (now including `docs/TYPESCRIPT_STYLE.md`, previously
   unreferenced) plus repo-specific run commands (`source source_me.sh && python3`,
   `check_codebase.sh`, `run_playwright_tests.sh`, `pytest tests/`).
 
+- Moved build pipeline scripts from `tools/` to new `pipeline/` folder
+  (`pipeline/build.mjs`, `pipeline/build_types.ts`); `tools/` now holds only standalone
+  utilities (e.g. `tools/html_to_pdf.mjs`). Updated `build_github_pages.sh` to call
+  `node pipeline/build.mjs` and added `pipeline/**/*.ts` globs to `tsconfig.lint.json`.
+
 ### Fixes and Maintenance
+
+- Post-audit low-risk fix batch 2: removed dead "hint" severity from
+  `ValidationItem.level` union and `level_marker()` in `src/rubric_panel.tsx`; removed
+  orphaned `id="panel-triples"` attribute from `src/app.tsx`; rewrote stale `.control-oval`
+  utility-class reference in `src/style.css` oval comment to describe the actual
+  `--control-radius: 50%` token approach; loosened fragile exact-count assertions in
+  `tests/test_app_state.mjs` (boot triples length) and `tests/test_derive_concepts.mjs`
+  (incoming/outgoing edge counts) to behavioral `>= N` forms; removed identity-equality
+  tests on `PALETTES` array elements from `tests/test_themes.mjs` and confirmed clamping
+  behavioral test is present; tightened `column_autosize.spec.ts` floor assertions from
+  `x - 1` to `x`; removed redundant `waitForTimeout` calls adjacent to auto-retrying
+  `expect()` assertions across Playwright specs; added three unit tests for
+  `compute_cell_classification` to `tests/test_app_state.mjs` (worked honeybees example,
+  self-loop precedence, null/blank active concept); converted bare backtick path for
+  `src/measure_text.ts` to a markdown link in `docs/CODE_ARCHITECTURE.md`; added
+  `src/measure_text.ts` to the pure-modules bullet in `docs/FILE_STRUCTURE.md`.
+
+- Fixed `tests/playwright/column_autosize.spec.ts` floor assertion: after a long verb
+  commit, 1fr redistribution intentionally shrinks from/to from their inflated baseline
+  toward the 6em clamp floor; the test now asserts against the live 6em floor (computed
+  from the header font-size) instead of the baseline, and polls the verb track past the
+  150ms grid transition instead of a vacuous waitForFunction.
+
+- Audit cleanup batch: restored deleted `tests/playwright/definitions_removed.spec.ts`
+  regression guard; stripped planning tags (WP-*) from Playwright spec header comments
+  and replaced with plain-English descriptions; corrected stale comments in `src/app.tsx`
+  (corner preset list), `src/triples_table.tsx` (clamp/minmax note), and
+  `src/concept_autocomplete.tsx` (column cap note); fixed inverted primary/fallback
+  comments in `tests/playwright/walkthrough_demo.mts` chain-button path and removed
+  vestigial unused variable; loosened fragile absolute assertions in column_autosize,
+  toolbar_icons, cell_highlight, and add_row_and_chain specs (relative checks,
+  named threshold constant, locator-based waits replacing waitForTimeout); removed
+  `_temp_inspect.mjs` scratch file; dropped `export` from internal-only
+  `measure_text_width` in `src/measure_text.ts`; updated preset display names in
+  `docs/CODE_ARCHITECTURE.md`.
+
+- Ribbon toolbar spacing polish (WP-E1 follow-up): each `.toolbar-group` panel now lays its caption
+  over a single horizontal `.toolbar-group-buttons` row (new wrapper span in `src/toolbar.tsx`)
+  instead of a vertical button stack that overflowed and clipped under the fixed 48px bar; the
+  `.app-shell` toolbar grid row changes to `minmax(var(--toolbar-height), auto)` so panels fit. New
+  rhythm tokens `--ribbon-btn-gap` (within-group), `--ribbon-group-gap` (between-group), and
+  `--ribbon-btn-radius` (shared classic Macintosh rounded-rect corner on buttons and the title input)
+  give even, consistent spacing. Layout arrangement: title input left, the four groups as a
+  left-aligned cluster, autosave pushed right via `margin-left:auto`. Captions made uniform
+  (uppercase, 600 weight, muted). Danger styling on Clear, focus-visible outlines, and aria
+  attributes preserved; `tests/playwright/toolbar_icons.spec.ts` pixel-ink check still passes.
+
+- Triples-table grid polish (WP-A2 follow-up): even column rhythm and a snug right-side
+  control block. The three text-column tracks change from
+  `minmax(6em, min(var(--col-X), 45%))` with a trailing dead `minmax(0, 1fr)` spacer to
+  `minmax(clamp(6em, var(--col-X), 45%), 1fr)`, so the committed measured width becomes the
+  track MINIMUM (autosize floor/cap preserved) and the three columns SHARE leftover pane width
+  equally via `1fr` instead of pooling all slack into one uneven gap on the right. The arrow
+  glyphs move from `auto` to a fixed `1.5em` centered track so both arrow gaps match, and the
+  trailing spacer track is removed (the delete/chain buttons now sit flush at the right edge).
+  Delete and chain buttons get a shared `1.9em` fixed width, equal `2px 0` padding, centered
+  text, and the same classic Macintosh-style 4px `var(--radius)` corners, so the right-side
+  block is identical and aligned on every row. No-jitter contract preserved: `1fr` growth is
+  static and never reads `--col-*`, so draft keystrokes still do not resize a column.
+  `tests/playwright/column_autosize.spec.ts` needed no assertion change (commit widens, draft
+  does not). Only `src/style.css` (triples sections) changed; before/after evidence in
+  `output_smoke/polish_before.png` and `output_smoke/polish_after.png`.
+
+- A11y fixes (task #11): added non-color cues to per-cell highlight roles (solid/dashed/double
+  left border on cell-from/cell-to/cell-same, WCAG 1.4.1); added explicit `outline` to
+  `.pane-resizer:focus-visible` to meet WCAG 2.4.11; defined missing `--color-text: #222222`
+  token in `:root`; gave each toolbar ribbon group `role="group"` + `aria-labelledby` tied to
+  its caption id (WCAG 1.3.1); added `:focus-visible` outline rules for `.toolbar-btn` and
+  `.triples-add-btn` (WCAG 2.4.7); updated chain button `aria-label` to include row number
+  (TT-5); added `aria-valuetext` to the resizer separator (R-1, WCAG 1.3.1); capped
+  autocomplete listbox at `max-height: 240px; overflow-y: auto` (K-3). Audit report:
+  `docs/active_plans/audits/ui_refinements_a11y_audit.md`.
+
+- WP-E1: Fixed the toolbar Font Awesome icons rendering as empty tofu boxes. Root
+  cause was a corrupt @font-face src hint in the vendored
+  vendor/fontawesome/fa-solid.min.css: it read src:url(./fa-solid-900.woff2)
+  format(\"woff2\") with backslash-escaped quotes (a JSON/JS string-escaping
+  artifact from how the file was vendored). Chromium parses the woff2 and reports
+  the face "loaded" (document.fonts.check returns true, computed font-family
+  resolves, offsetWidth is nonzero, the woff2 serves HTTP 200, and the woff2 cmap
+  contains all nine glyph codepoints), yet the invalid format() token makes it
+  reject the src for text shaping, so every glyph paints as the browser notdef
+  box. A/B verification (corrupt vs fixed CSS, screenshotting after
+  document.fonts.ready) confirmed the escaped hint is the cause: glyphs appear
+  only with format("woff2"). Fix: corrected the two escaped quotes to plain
+  format("woff2"). build_github_pages.sh gains hard assertions that
+  dist/vendor/fontawesome/fa-solid.min.css exists and does not contain the
+  backslash-escaped format hint. Strengthened tests/playwright/toolbar_icons.spec.ts:
+  the prior tests only checked DOM metrics (which pass on tofu); added a pixel
+  paint check that enlarges the floppy-disk icon to 64px and measures center-region
+  ink (a real glyph fills the center ~0.52; a hollow tofu box inks 0.0), failing
+  below a 0.15 floor. The new check was verified to fail on the corrupt CSS and
+  pass on the fix. All 21 Playwright tests pass and bash build_github_pages.sh
+  reports "Built dist/ (GitHub Pages-ready)."
+
+- WP-B1 quality-review fixes (triple_row.tsx, app_state.ts). MAJOR-1: on row
+  unmount, clear the focus channel only when the row owns it -- guard compares
+  focused_concept() (new AppState field) against this row's from/to concept_key;
+  no phantom highlights after delete-while-focused. MINOR-2: from_role/to_role
+  wrapped in createMemo so classList re-evaluates only when cell_classification or
+  the cell's committed value changes. MINOR-3: per-span onFocusOut clears removed;
+  single row-div onFocusOut with relatedTarget check clears focus channel only when
+  focus truly leaves the row, eliminating the null gap on intra-row transitions.
+  All 22 Playwright tests pass; tsc and eslint exit 0.
+
+- Audit cleanup sweep: removed `tests/playwright/definitions_removed.spec.ts` (tested
+  absence of a removed feature, zero correctness value); removed screenshot-only test
+  case from `tests/playwright/toolbar_icons.spec.ts` (no assertions); removed two
+  `waitForTimeout(100)` calls from `tests/playwright/add_row_and_chain.spec.ts`
+  (Playwright auto-waits handle timing); removed three collection-size assertions from
+  `tests/test_app_state.mjs` (fragile hardcoded sizes); removed key-presence list test
+  from `tests/test_themes.mjs`; relaxed two hardcoded `length == 3` assertions in
+  `tests/test_derive_concepts.mjs` and `tests/test_document_codec.mjs` to `>= 2`.
+  In source: removed workstream tags (`WP-B1:`, `MAJOR-1`, `MINOR-2`, `MINOR-3`, `K-3`)
+  from production code comments in `src/triple_row.tsx`, `src/app_state.ts`,
+  `src/concept_autocomplete.tsx`; removed defensive `|| "normal"` / `|| "400"`
+  fallbacks from `src/measure_text.ts`; fixed stale `preview_text` comment in
+  `src/triples_table.tsx`; removed dead import from `tests/playwright/walkthrough_demo.mts`.
+  In CSS: merged duplicate `.main-area` block (second block at line 870 removed, its
+  `gap: 0` moved to canonical block); removed orphaned `--resizer-width` from second `:root`
+  (consolidated into main `:root`); removed `WP-B1:` tag from CSS section header.
+  Deps: removed unused `packaging` from `pip_requirements-dev.txt`. Added `output_smoke/`
+  to `.gitignore`. Updated `docs/CODE_ARCHITECTURE.md` to document `src/measure_text.ts`
+  and WP-B1 state additions; updated `docs/FILE_STRUCTURE.md` with walkthrough files and
+  `output_smoke/` generated artifact. All 530 pytest tests pass, `check_codebase.sh` 6/6.
+
+- Docs closeout sweep (audit-driven): removed stale "10 definitions" rubric claim from
+  `README.md` first paragraph; added pane resizer and chain button to `docs/USAGE.md`
+  Map interactions and Triples table sections; updated `docs/CODE_ARCHITECTURE.md`
+  `src/app.tsx` description (resizer, localStorage persistence) and `src/toolbar.tsx`
+  description (Font Awesome ribbon, vendor copy, build assertion); reordered and merged
+  duplicate subsections in the 2026-06-12 changelog block to match required section order
+  from `docs/REPO_STYLE.md`; added dated removal note and corrected stale definitions
+  references in `docs/active_plans/active/concept_map_maker_plan.md`.
+
+- WP-A1 spec-review fix: `to_commit_fns` map in `TriplesTable` re-keyed from
+  render index (`number`) to stable `triple.id` (`string`). After a row delete,
+  surviving rows shift indices but `expose_to_commit` fires only in `onMount`, so
+  the old index-keyed map returned the deleted row's stale closure; the draft
+  committed only via the 150 ms blur fallback. Fix: `expose_to_commit` callback now
+  calls `to_commit_fns.set(triple.id, fn)`; `commit_focused_to_draft` resolves
+  focused index -> `props.state.doc.triples[idx]` -> `triple.id` -> map lookup;
+  `handle_chain` does the same. `TripleRow` gains `remove_to_commit` prop (called in
+  `onCleanup`) so deleted-row entries are evicted from the map immediately on unmount
+  rather than accumulating. `concept_autocomplete.tsx` is unchanged. All 19 Playwright
+  tests pass, `npx tsc --noEmit -p tsconfig.json` exits 0,
+  `npx eslint src/triples_table.tsx src/triple_row.tsx src/concept_autocomplete.tsx`
+  exits 0.
+
+- WP-C1/WP-D1 quality-review cleanup in `src/app.tsx` and `src/style.css`:
+  removed dead `EditorTab` type alias, `active_tab` signal (setter was never
+  called), and `hidden={active_tab() !== "triples"}` attribute (MAJOR-1);
+  stripped `role="tabpanel"` and `aria-labelledby="tab-triples"` from
+  `#panel-triples` div whose tab bar no longer exists (MAJOR-2); deleted
+  dead `.tab-bar`, `.tab`, `.tab:hover`, `.tab-active`, and
+  `[role="tabpanel"]` CSS rules plus the now-unused `--color-tab-active`
+  CSS variable (MAJOR-3); removed no-op `margin-right: 0` / `margin-left: 0`
+  declarations on `.editor-pane` / `.map-pane` in the resizer section and
+  corrected the comment to describe what the override actually does
+  (`gap: 0` on `.main-area`) (MINOR-1); added `aria-valuenow={editor_ratio()}`,
+  `aria-valuemin`, and `aria-valuemax` to the focusable resizer separator
+  (MINOR-2); added `onLostPointerCapture` handler on the resizer that
+  idempotently removes `pane-resizer--dragging` and `body.resizer-active`
+  classes (MINOR-3). `npx tsc --noEmit -p tsconfig.json` exits 0;
+  `npx eslint src/app.tsx` exits 0; zero hits on dead-symbol grep.
 
 - Added missing `-> None` return annotation to `main()` in
   `tools/check_css_content_policy.py`; `pytest tests/` now passes 409/409
@@ -301,15 +621,6 @@
   `.definitions-table` (border-collapse, black text, light header). White background, black
   text throughout.
 
-### Behavior or Interface Changes
-
-- Moved build pipeline scripts from `tools/` to new `pipeline/` folder
-  (`pipeline/build.mjs`, `pipeline/build_types.ts`); `tools/` now holds only standalone
-  utilities (e.g. `tools/html_to_pdf.mjs`). Updated `build_github_pages.sh` to call
-  `node pipeline/build.mjs` and added `pipeline/**/*.ts` globs to `tsconfig.lint.json`.
-
-### Fixes and Maintenance
-
 - Audit cleanup: removed planning-scaffold tags (WP-*/workstream/milestone references) and
   non-ASCII characters from `src/` comments; deleted dead code in `src/csv_codec.ts`
   (`const c` / `void c` suppression and stream-of-consciousness reasoning block), collapsed
@@ -328,6 +639,42 @@
 
 - Audit cleanup: per-instance rubric flash timer, aria-labels on map bubbles, removed unused
   placeholder CSS and redundant playwright dependency.
+
+- UI-refinements plan amended with execution addenda (corner-style rollback, walkthrough demo
+  tool, post-audit fix batches, final gate results) and archived to docs/archive/ via git mv.
+
+- Fixed the Rounded map bubble shape rendering identically to the new Capsule shape: `rounded`
+  corner_radius in `src/themes.ts` dropped from 18 (half the node height, i.e. a stadium) to 8,
+  restoring a classic rounded rectangle clearly distinct from Capsule; `tests/test_themes.mjs`
+  now asserts the rounded radius stays below the capsule half-height bound.
+
+### Removals and Deprecations
+
+- WP-D1: Removed the definitions feature entirely. `Definition` type deleted from
+  `src/types.ts`; `definitions` field removed from `CmapDocument`. `src/definitions_table.tsx`
+  removed via `git rm`. All definition state actions (`update_definition`, `add_definition`,
+  `remove_definition`, `bulk_insert_definitions`) removed from `src/app_state.ts` and the
+  `AppState` interface. Definitions tab and `#panel-definitions` panel removed from
+  `src/app.tsx`. `min_10_definitions` rubric rule and `defined_word_absent` hint removed from
+  `src/validate_document.ts`. Definition-table CSS rules removed from `@media print` block in
+  `src/style.css`. Fixtures `tests/fixtures/honeybees_document.json` and
+  `tests/fixtures/stress_80_nodes.json` updated to the new format (no `definitions` key).
+  `docs/USAGE.md` and `docs/FILE_FORMATS.md` updated to remove definitions wording.
+  `docs/CODE_ARCHITECTURE.md` and `docs/FILE_STRUCTURE.md` updated to remove stale references.
+
+### Decisions and Failures
+
+- Corner-preset feature removed the same day it was added (2026-06-12). The original
+  "Mac rounded rects" user request was about concept map node shapes, not UI chrome.
+  The corner-style dropdown (Capsule / Oval / Rounded / Corner) was a misinterpretation
+  of that request; the correct implementation is the Capsule map shape option added
+  today. The UI controls are now permanently fixed at classic Mac rounded rects (5px).
+
+- WP-D1 decision: definitions are out of scope (students do them separately); user decision to
+  remove. The app was unshipped, so no migration path is required and old local files failing to
+  open is acceptable. Codec decision: `parse_document` now silently ignores the `definitions`
+  field if present in an old file (the field is not read, not validated, and not round-tripped);
+  a test (`test_document_codec.mjs`) asserts this behavior explicitly.
 
 ### Developer Tests and Notes
 
