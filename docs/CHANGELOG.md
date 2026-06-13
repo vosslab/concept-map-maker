@@ -691,6 +691,12 @@
 
 ### Developer Tests and Notes
 
+- GitHub Pages live-asset verification: confirmed all five assets return HTTP 200 via curl
+  against https://vosslab.github.io/concept-map-maker/. Assets checked: `/` (HTML index),
+  `/main.js`, `/style.css`, `/vendor/fontawesome/fa-solid.min.css`, and
+  `/vendor/fontawesome/fa-solid-900.woff2` (Font Awesome woff2 font). Deploy workflow
+  `.github/workflows/deploy-pages.yml` ran green on the triggering push to `main`.
+
 - Audit cleanup: removed fragile collection-size/fixture-ID/wall-clock assertions from unit and
   Playwright tests. Deleted "palette has exactly 6 entries" length tests in `test_themes.mjs`;
   rewrote hardcoded index `[5]` asserts to use `PALETTES.fire.length - 1`. Deleted
