@@ -15,8 +15,8 @@
 		"pdf": "node tools/html_to_pdf.mjs"
 	},
 	"dependencies": {
-		"solid-js": ">=1.9.5",
-		"@dagrejs/dagre": ">=1.1.4"
+		"solid-js": ">=1.9.13",
+		"@dagrejs/dagre": ">=3.0.0"
 	},
 	"devDependencies": {
 		"@types/node": ">=25.9.3",
@@ -26,8 +26,8 @@
 		"babel-preset-solid": ">=1.9.12",
 		"@babel/preset-typescript": ">=7.29.7",
 		"typescript": ">=6.0.3",
-		"eslint": ">=10.5.0",
-		"@eslint/js": ">=10.0.1",
+		"eslint": ">=9.39.4 <10",
+		"@eslint/js": ">=9.39.4 <10",
 		"typescript-eslint": ">=8.61.0",
 		"eslint-plugin-solid": ">=0.14.5",
 		"globals": ">=17.6.0",

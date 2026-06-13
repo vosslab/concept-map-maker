@@ -98,6 +98,45 @@ triples table:
 The paste handler reads the clipboard as tab-separated values, matching the default
 copy format of most spreadsheet apps.
 
+## Deploy to GitHub Pages
+
+The CI workflow `.github/workflows/deploy_pages.yml` builds `dist/` and publishes
+it to GitHub Pages on every push to `main` and on manual dispatch.
+
+Live URL: `https://vosslab.github.io/concept-map-maker/`
+
+### How it works
+
+- Triggers: push to `main` and `workflow_dispatch` (manual run from the Actions tab).
+- CI runs `npm ci` then `npm run build` (Node 20 LTS) -- the same build command used locally.
+- Two jobs: `build` uploads `dist/` as a Pages artifact; `deploy` publishes it via
+  `actions/deploy-pages`.
+- Assets stay relative (no absolute `/` paths, no `<base href>`), so the app serves
+  correctly from the `/concept-map-maker/` subpath without any code changes.
+
+### One-time setup (exact order)
+
+1. (operator action) Merge the workflow to `main`. The workflow must be on the default
+   branch before it can run or be dispatched.
+2. (operator action) In the GitHub repo: Settings -> Pages -> Source = "GitHub Actions".
+   This can be set before any run; it does not require an existing deployment.
+3. (operator action) Trigger a run. The merge in step 1 already fires a `push` to `main`.
+   If Pages source was not yet set when that run started, re-run via the Actions tab ->
+   Run workflow after step 2.
+4. Verify: once both jobs are green and `deploy-pages` reports a URL, the app is live.
+
+Note: if the first auto-run executes before step 2, the `deploy` job may fail because
+Pages is not yet enabled. That is expected -- re-run after enabling Pages. Do not treat
+the first red run as a code defect.
+
+### Subpath-safety invariant
+
+All asset references in `src/index.html` (`style.css`, `main.js`,
+`vendor/fontawesome/fa-solid.min.css`, `vendor/fontawesome/fa-solid-900.woff2`) are
+relative paths with no leading `/` and no `<base href>`. The vendored font CSS also
+uses a relative `url()`. Do not introduce absolute `/` asset paths or a `<base href>`;
+doing so breaks the subpath deploy.
+
 ## Developer tasks
 
 Run all checks (TypeScript type-check, ESLint, node unit tests):

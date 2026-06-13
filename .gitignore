@@ -29,7 +29,6 @@ output_smoke/
 meta.json
 stats.html
 tests/fixtures/
-package-lock.json
 # === PYTHON ===
 build/
 dist/

@@ -4,6 +4,19 @@
 
 ### Additions and New Features
 
+- GitHub Pages deploy workflow: added `.github/workflows/deploy_pages.yml` that triggers on
+  push to `main` and on `workflow_dispatch`. CI runs `npm ci` then `npm run build` on Node 20
+  LTS (same command as local). Two jobs: `build` uploads `dist/` as a Pages artifact;
+  `deploy` publishes via `actions/deploy-pages`. Permissions block sets `pages: write` and
+  `id-token: write`; concurrency group `pages` with `cancel-in-progress: true`. Live URL:
+  `https://vosslab.github.io/concept-map-maker/`. One-time setup (operator actions): merge
+  workflow to `main`, then enable Pages via Settings -> Pages -> Source = "GitHub Actions",
+  then re-run via Actions tab if the first auto-run fired before Pages was enabled. Subpath
+  safety confirmed: all asset refs in `src/index.html` are relative (no leading `/`, no
+  `<base href>`). Documented in `docs/USAGE.md` under "Deploy to GitHub Pages".
+  Also tracked `package-lock.json` (removed from `.gitignore`) so `npm ci` resolves
+  deterministic dependency versions in CI.
+
 - Corner-style select in the toolbar Layout group: a "Corners" dropdown offers four presets --
   Capsule (pill, 999px), Oval (elliptical, 50% --control-radius), Rounded rect (classic 5px),
   Corner rect (sharp 0px). Replaces the prior two-state toggle button.
