@@ -4,7 +4,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { edge_path, self_loop_path, assign_curvatures } from "../src/edge_geometry.ts";
+import {
+  edge_path,
+  self_loop_path,
+  assign_curvatures,
+  place_edge_label,
+} from "../src/edge_geometry.ts";
+import { LABEL_CHAR_W_PX, LABEL_LINE_H_PX, LABEL_CLEAR_MARGIN_PX } from "../src/label_wrap.ts";
 
 // Parse the four "C" control/end coordinate pairs out of a path "d" string.
 // Returns { start, c1, c2, end } as {x,y} points.
@@ -100,6 +106,165 @@ test("label anchor is the curve midpoint t=0.5", () => {
   // endpoints (50 and 250) and y stays on the axis
   assert.equal(geo.label_x, 150);
   assert.equal(geo.label_y, 0);
+});
+
+test("edge_path exposes the cubic control points (additive field)", () => {
+  const from = { x: 0, y: 0, w: 100, h: 40 };
+  const to = { x: 300, y: 0, w: 100, h: 40 };
+  const geo = edge_path(from, to, "rect", 0);
+  // the cubic mirrors the path geometry (unrounded), so callers can sample it.
+  // endpoints are exact; controls match the parsed "d" within rounding tolerance.
+  const p = parse_path(geo.d);
+  assert.equal(geo.cubic.x0, 50);
+  assert.equal(geo.cubic.y0, 0);
+  assert.equal(geo.cubic.x3, 250);
+  assert.equal(geo.cubic.y3, 0);
+  assert.ok(Math.abs(geo.cubic.x1 - p.c1.x) < 0.01);
+  assert.ok(Math.abs(geo.cubic.x2 - p.c2.x) < 0.01);
+});
+
+test("self_loop_path exposes the cubic control points (additive field)", () => {
+  const box = { x: 100, y: 100, w: 80, h: 40 };
+  const geo = self_loop_path(box, "rect");
+  const p = parse_path(geo.d);
+  // the cubic mirrors the path (unrounded) so a caller could evaluate any point
+  // on the loop; it matches the parsed "d" within rounding tolerance
+  assert.ok(Math.abs(geo.cubic.x0 - p.start.x) < 0.01);
+  assert.ok(Math.abs(geo.cubic.y0 - p.start.y) < 0.01);
+  assert.ok(Math.abs(geo.cubic.x3 - p.end.x) < 0.01);
+  assert.ok(Math.abs(geo.cubic.y3 - p.end.y) < 0.01);
+});
+
+//============================================
+// place_edge_label (uniform maximum-clearance rule)
+//============================================
+
+// Build a straight horizontal edge's cubic for placement tests: the curve runs
+// along y = 0 from x = 50 to x = 250, midpoint at (150, 0).
+function straight_cubic() {
+  const from = { x: 0, y: 0, w: 100, h: 40 };
+  const to = { x: 300, y: 0, w: 100, h: 40 };
+  const geo = edge_path(from, to, "rect", 0);
+  return geo.cubic;
+}
+
+// Axis-aligned overlap test between a label AABB centered at point with the
+// given half extents and a node box (center x/y, full w/h).
+function aabb_overlaps(point, half_w, half_h, box) {
+  const gap_x = Math.abs(point.x - box.x) - (half_w + box.w / 2);
+  const gap_y = Math.abs(point.y - box.y) - (half_h + box.h / 2);
+  return gap_x < 0 && gap_y < 0;
+}
+
+test("place_edge_label returns the midpoint when the midpoint is clear", () => {
+  const cubic = straight_cubic();
+  // no obstacles: the center-first sample with strict-greater keeps t = 0.5.
+  // straight_cubic() runs from x=50 to x=250 along y=0; midpoint is at (150, 0).
+  // Use relational assertions: point lies in the midpoint region of the curve and
+  // on the chord axis (y == 0 for a horizontal straight edge).
+  const point = place_edge_label(cubic, "make", []);
+  // midpoint x is halfway between clipped endpoints 50 and 250
+  assert.ok(
+    point.x >= cubic.x0 && point.x <= cubic.x3,
+    `point x (${point.x}) should lie on the curve between ${cubic.x0} and ${cubic.x3}`,
+  );
+  // for a clear straight edge the best point is the exact midpoint
+  const expected_mid_x = (cubic.x0 + cubic.x3) / 2;
+  assert.ok(
+    Math.abs(point.x - expected_mid_x) <= 1,
+    `point x (${point.x}) should equal midpoint ${expected_mid_x}`,
+  );
+  // horizontal straight edge: y stays on the chord axis
+  assert.equal(point.y, cubic.y0);
+});
+
+test("place_edge_label slides off an obstacle straddling the midpoint", () => {
+  const cubic = straight_cubic();
+  // a small bubble centered on the midpoint blocks t = 0.5; an outward sample on
+  // the curve has room to clear it, so the rule must pick a clearing point.
+  const obstacle = { x: 150, y: 0, w: 30, h: 30 };
+  const point = place_edge_label(cubic, "x", [obstacle]);
+  // the chosen point's label AABB clears the obstacle (no overlap). "x" wraps to
+  // one short line; use the production constants so the test tracks any sizing change.
+  const half_w = (LABEL_CHAR_W_PX * "x".length) / 2 + LABEL_CLEAR_MARGIN_PX;
+  const half_h = LABEL_LINE_H_PX / 2 + LABEL_CLEAR_MARGIN_PX;
+  const overlaps = aabb_overlaps(point, half_w, half_h, obstacle);
+  assert.equal(overlaps, false);
+  // and it moved away from the blocked midpoint (relational: x is not the midpoint)
+  const mid_x = (cubic.x0 + cubic.x3) / 2;
+  assert.notEqual(point.x, mid_x);
+});
+
+test("place_edge_label returns the maximum-clearance point when every candidate overlaps", () => {
+  const cubic = straight_cubic();
+  // a wall covering the entire sampled span both along and just below the curve:
+  // every candidate overlaps it, so the rule returns the maximum-clearance (least
+  // negative) point deterministically. With the perpendicular freedom the best
+  // candidate steps UP, away from the wall below, reducing the overlap depth.
+  const wall = { x: 150, y: 200, w: 4000, h: 420 };
+  const point = place_edge_label(cubic, "make", [wall]);
+  // verify the returned point is in fact the maximum-clearance candidate by
+  // re-scoring it against the wall: stepping up gives a larger (less negative)
+  // vertical clearance than the on-curve anchor at y = 0.
+  const label_half_w = (LABEL_CHAR_W_PX * "make".length) / 2 + LABEL_CLEAR_MARGIN_PX;
+  const label_half_h = LABEL_LINE_H_PX / 2 + LABEL_CLEAR_MARGIN_PX;
+  function clearance_at(y) {
+    const gap_x = Math.abs(150 - wall.x) - (label_half_w + wall.w / 2);
+    const gap_y = Math.abs(y - wall.y) - (label_half_h + wall.h / 2);
+    return Math.max(gap_x, gap_y);
+  }
+  // the returned point clears the wall better than the on-curve anchor would
+  assert.ok(clearance_at(point.y) >= clearance_at(0));
+  // it stayed centered along the curve (x unchanged) and stepped away vertically
+  assert.equal(point.x, 150);
+  assert.ok(point.y < 0);
+});
+
+test("place_edge_label steps perpendicular when the whole curve is blocked along it", () => {
+  const cubic = straight_cubic();
+  // a thin wall lying ALONG the curve (centered on y = 0, tall enough to cover the
+  // small label) blocks every on-curve sample regardless of t, but it is narrow
+  // vertically so clear space exists directly above and below. The perpendicular
+  // degree of freedom must step the label sideways (off y = 0) into that space.
+  const wall = { x: 150, y: 0, w: 4000, h: 8 };
+  const point = place_edge_label(cubic, "x", [wall]);
+  // "x" wraps to one short line; use production constants so sizing tracks any change
+  const half_w = (LABEL_CHAR_W_PX * "x".length) / 2 + LABEL_CLEAR_MARGIN_PX;
+  const half_h = LABEL_LINE_H_PX / 2 + LABEL_CLEAR_MARGIN_PX;
+  const overlaps = aabb_overlaps(point, half_w, half_h, wall);
+  // a sideways (perpendicular) candidate clears the wall: positive clearance
+  assert.equal(overlaps, false);
+  // the clearing point moved OFF the curve axis (the perpendicular freedom acted)
+  assert.notEqual(point.y, 0);
+});
+
+test("place_edge_label keeps the on-curve midpoint (no offset) when it is clear", () => {
+  const cubic = straight_cubic();
+  // clear space everywhere: the centered, no-offset anchor must win, so no
+  // gratuitous perpendicular shift is applied.
+  // Relational: point is at the curve midpoint and y is on the chord axis.
+  const point = place_edge_label(cubic, "make", []);
+  const expected_mid_x = (cubic.x0 + cubic.x3) / 2;
+  assert.ok(
+    Math.abs(point.x - expected_mid_x) <= 1,
+    `point x (${point.x}) should equal midpoint ${expected_mid_x}`,
+  );
+  assert.equal(point.y, cubic.y0);
+});
+
+test("place_edge_label prefers the center on a clearance tie", () => {
+  const cubic = straight_cubic();
+  // two mirror-image obstacles equidistant from the midpoint create a tie
+  // between symmetric samples; center-first iteration keeps the midpoint.
+  const left = { x: 90, y: 0, w: 20, h: 20 };
+  const right = { x: 210, y: 0, w: 20, h: 20 };
+  const point = place_edge_label(cubic, "x", [left, right]);
+  const expected_mid_x = (cubic.x0 + cubic.x3) / 2;
+  assert.ok(
+    Math.abs(point.x - expected_mid_x) <= 1,
+    `point x (${point.x}) should equal midpoint ${expected_mid_x} on a tie`,
+  );
+  assert.equal(point.y, cubic.y0);
 });
 
 //============================================

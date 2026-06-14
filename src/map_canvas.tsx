@@ -18,13 +18,17 @@
 // dragging the background pans, double-click resets to the identity view.
 
 import type { JSX } from "solid-js";
-import { For, createSignal } from "solid-js";
+import { For, createMemo, createSignal } from "solid-js";
 
 import type { AppState } from "./app_state";
 import type { ConceptKey, Triple } from "./types";
 import { concept_key } from "./types";
-import type { NodeBox, EdgeTriple } from "./edge_geometry";
+import type { NodeBox, EdgeTriple, Point } from "./edge_geometry";
 import { assign_curvatures } from "./edge_geometry";
+import type { RouteEdge } from "./edge_routing";
+import { compute_route_curvatures } from "./edge_routing";
+import type { LabelEdgeInput } from "./label_layout";
+import { compute_label_positions } from "./label_layout";
 import { effective_extent } from "./map_bounds";
 import { ConceptEdge, ARROW_MARKER_ID, ARROW_HIGHLIGHT_MARKER_ID } from "./concept_edge";
 import { map_is_dark } from "./ui_theme";
@@ -61,7 +65,7 @@ interface Viewport {
 // the canvas renders standalone and exposes its element only when a caller asks.
 export interface MapCanvasProps {
   state: AppState;
-  node_slot?: (key: ConceptKey, box: NodeBox) => JSX.Element;
+  node_slot?: (key: ConceptKey, box: () => NodeBox) => JSX.Element;
   svg_ref?: (el: SVGSVGElement) => void;
 }
 
@@ -130,14 +134,14 @@ function renderable_edges(triples: Triple[], boxes: Map<ConceptKey, NodeBox>): R
 // The fallback node rendering used when no node_slot is provided: a simple rect
 // with a centered text label. Inline-attribute presentation only. When node_slot
 // is provided (as in app.tsx), ConceptNode is used instead of this placeholder.
-function default_node(key: ConceptKey, box: NodeBox): JSX.Element {
+function default_node(key: ConceptKey, box: () => NodeBox): JSX.Element {
   return (
     <g data-concept-key={key}>
       <rect
-        x={box.x - box.w / 2}
-        y={box.y - box.h / 2}
-        width={box.w}
-        height={box.h}
+        x={box().x - box().w / 2}
+        y={box().y - box().h / 2}
+        width={box().w}
+        height={box().h}
         rx={8}
         ry={8}
         fill="#f5f0e0"
@@ -145,8 +149,8 @@ function default_node(key: ConceptKey, box: NodeBox): JSX.Element {
         stroke-width={1.5}
       />
       <text
-        x={box.x}
-        y={box.y}
+        x={box().x}
+        y={box().y}
         text-anchor="middle"
         dominant-baseline="middle"
         font-family="Helvetica, Arial, sans-serif"
@@ -178,8 +182,18 @@ export function MapCanvas(props: MapCanvasProps): JSX.Element {
   let last_client_x = 0;
   let last_client_y = 0;
 
-  // resolved render boxes for every placed concept (override or layout center)
-  const node_boxes = (): Map<ConceptKey, NodeBox> => build_node_boxes(props.state);
+  // resolved render boxes for every placed concept (override or layout center).
+  // A memo so the SAME map object is reused while inputs are unchanged and a
+  // single fresh map is produced per drag move; this keeps node_keys() stable
+  // (===) so <For> patches each node <g> in place instead of recreating it.
+  const node_boxes = createMemo(() => build_node_boxes(props.state));
+  // the box map's keyset, used to key the nodes <For> by stable ConceptKey
+  const node_keys = (): ConceptKey[] => Array.from(node_boxes().keys());
+  // every rendered node box, fed to the centralized label placement pass as the
+  // base obstacle set. Reactive: reads the same live node_boxes memo, so during a
+  // drag the pass re-runs and every label re-places in step with the moving
+  // bubble (override-aware).
+  const node_box_list = (): NodeBox[] => Array.from(node_boxes().values());
 
   // arrowhead marker fills, switched on the resolved map theme so they match the
   // edge stroke colors. Export forces light via map_is_dark() returning false.
@@ -204,7 +218,9 @@ export function MapCanvas(props: MapCanvasProps): JSX.Element {
   // curvature per rendered triple, assigned over exactly the drawn edge set so
   // bidirectional pairs bow apart and duplicates fan out
   const edges = (): RenderableEdge[] => renderable_edges(props.state.doc.triples, node_boxes());
-  const curvatures = (): Map<string, number> => {
+  // base curvature per rendered edge: assign_curvatures encodes the
+  // bidirectional/duplicate fanning relationship over exactly the drawn set
+  const base_curvatures = (): Map<string, number> => {
     const rows: EdgeTriple[] = edges().map((edge) => ({
       id: edge.triple.id,
       from_key: edge.from_key,
@@ -212,6 +228,54 @@ export function MapCanvas(props: MapCanvasProps): JSX.Element {
     }));
     return assign_curvatures(rows);
   };
+  // per-edge inputs for the post-dagre routing pass, built from the rendered
+  // edge set in stable order; is_self_loop drives the router's skip rule
+  const route_inputs = (): RouteEdge[] =>
+    edges().map((edge) => ({
+      id: edge.triple.id,
+      from_key: edge.from_key,
+      to_key: edge.to_key,
+      from_box: edge.from_box,
+      to_box: edge.to_box,
+      is_self_loop: edge.from_key === edge.to_key,
+    }));
+  // effective curvature per edge: the routing layer takes the base curvatures and
+  // bulges any bypass edge AROUND an intervening node. This single map feeds BOTH
+  // the drawn edge curvature and the label placement pass, so a routed edge bows
+  // and its label sits on the bowed curve. Reactive: reads live node_boxes, so a
+  // drag re-runs routing and re-places labels in step (override-aware).
+  const curvatures = (): Map<string, number> =>
+    compute_route_curvatures(
+      route_inputs(),
+      node_boxes(),
+      props.state.doc.theme.shape,
+      base_curvatures(),
+    );
+
+  // minimal per-edge inputs for the centralized label placement pass, built from
+  // the rendered edge set in stable array order (the placement priority order).
+  const edge_inputs = (): LabelEdgeInput[] =>
+    edges().map((edge) => ({
+      id: edge.triple.id,
+      from_box: edge.from_box,
+      to_box: edge.to_box,
+      verb: edge.triple.verb,
+      is_self_loop: edge.from_key === edge.to_key,
+      from_key: edge.from_key,
+      to_key: edge.to_key,
+    }));
+
+  // resolved label anchor per edge id, computed in ONE pass over the whole edge
+  // set so labels avoid both node bubbles and each other. Reactive: reads the
+  // live node_boxes (via node_box_list) and curvatures, so a drag re-runs the
+  // pass and every label re-places (override-aware).
+  const label_positions = (): Map<string, Point> =>
+    compute_label_positions(
+      edge_inputs(),
+      node_box_list(),
+      props.state.doc.theme.shape,
+      curvatures(),
+    );
 
   //--------------------------------------------
   // interaction handlers (ephemeral viewport)
@@ -349,15 +413,22 @@ export function MapCanvas(props: MapCanvasProps): JSX.Element {
               curvature={curvatures().get(edge.triple.id) ?? 0}
               from_box={edge.from_box}
               to_box={edge.to_box}
+              // the pass contains every non-empty-verb edge; an empty-verb edge
+              // has no entry, and ConceptEdge renders no label for it (Show
+              // guard), so the endpoint-midpoint fallback is never drawn
+              label_pos={
+                label_positions().get(edge.triple.id) ?? edge_midpoint(edge.from_box, edge.to_box)
+              }
             />
           )}
         </For>
 
         {/* Nodes: the injected slot when provided, else the default placeholder. */}
-        <For each={Array.from(node_boxes().entries())}>
-          {(entry) => {
-            const key = entry[0];
-            const box = entry[1];
+        <For each={node_keys()}>
+          {(key) => {
+            // node_keys is the boxes map's own keyset; the entry is present for
+            // this row's lifetime (non-null asserted, repo-idiomatic)
+            const box = (): NodeBox => node_boxes().get(key)!;
             const slot = props.node_slot;
             if (slot !== undefined) {
               return slot(key, box);
@@ -368,6 +439,16 @@ export function MapCanvas(props: MapCanvasProps): JSX.Element {
       </g>
     </svg>
   );
+}
+
+//============================================
+// edge_midpoint
+//============================================
+// The midpoint between two node-box centers. Used only as the label_pos fallback
+// for an empty-verb edge (which renders no label), so it never affects a drawn
+// label; it keeps the prop well-typed without an Optional.
+function edge_midpoint(from_box: NodeBox, to_box: NodeBox): Point {
+  return { x: (from_box.x + to_box.x) / 2, y: (from_box.y + to_box.y) / 2 };
 }
 
 //============================================

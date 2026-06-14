@@ -2,11 +2,12 @@
 //
 // This module is plain TypeScript with zero imports from Solid or the DOM. It
 // turns a pair of node boxes into an SVG cubic bezier path clipped to each
-// node's boundary, places the verb label at the curve midpoint, draws valid
-// self-loop arcs, and assigns curvature so bidirectional pairs bow apart and
-// duplicate same-direction edges fan out.
+// node's boundary, places the verb label by the uniform maximum-clearance rule
+// along the curve, draws valid self-loop arcs, and assigns curvature so
+// bidirectional pairs bow apart and duplicate same-direction edges fan out.
 
 import type { ThemeShape } from "./types.ts";
+import { wrap_verb_label, label_box, LABEL_CLEAR_MARGIN_PX, LABEL_LINE_H_PX } from "./label_wrap";
 
 // A node bounding box. x and y are the CENTER of the box; w and h are full
 // width and height. This center-based convention matches how the layout
@@ -18,12 +19,28 @@ export interface NodeBox {
   h: number;
 }
 
-// The rendered geometry for one edge: an SVG path "d" string plus the point at
-// which the verb label should be anchored (the curve midpoint, t = 0.5).
+// The cubic bezier control points for one edge, in draw order: start (0),
+// first control (1), second control (2), end (3). Callers evaluate any point
+// along the curve from these so label placement can sample the whole arc.
+export interface CubicControlPoints {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  x3: number;
+  y3: number;
+}
+
+// The rendered geometry for one edge: an SVG path "d" string, the curve
+// midpoint (t = 0.5) used by self-loops and as the placement tie-break center,
+// and the cubic control points so callers can evaluate any point on the curve.
 export interface EdgeGeometry {
   d: string;
   label_x: number;
   label_y: number;
+  cubic: CubicControlPoints;
 }
 
 // A directed edge identity used only for curvature assignment.
@@ -33,8 +50,8 @@ export interface EdgeTriple {
   to_key: string;
 }
 
-// A point on the plane, used internally for clip and midpoint results.
-interface Point {
+// A point on the plane, used for clip, midpoint, and label-placement results.
+export interface Point {
   x: number;
   y: number;
 }
@@ -206,7 +223,18 @@ export function edge_path(
   const mid = cubic_point(start.x, start.y, c1_x, c1_y, c2_x, c2_y, end.x, end.y, 0.5);
   // assemble the SVG path; round coordinates to keep output compact and stable
   const d = build_cubic_d(start.x, start.y, c1_x, c1_y, c2_x, c2_y, end.x, end.y);
-  return { d, label_x: mid.x, label_y: mid.y };
+  // control points exposed so callers can evaluate any point along the curve
+  const cubic: CubicControlPoints = {
+    x0: start.x,
+    y0: start.y,
+    x1: c1_x,
+    y1: c1_y,
+    x2: c2_x,
+    y2: c2_y,
+    x3: end.x,
+    y3: end.y,
+  };
+  return { d, label_x: mid.x, label_y: mid.y, cubic };
 }
 
 //============================================
@@ -233,7 +261,203 @@ export function self_loop_path(box: NodeBox, shape: ThemeShape): EdgeGeometry {
   // label anchor at the top of the bulge (cubic midpoint)
   const mid = cubic_point(start.x, start.y, c1_x, c1_y, c2_x, c2_y, end.x, end.y, 0.5);
   const d = build_cubic_d(start.x, start.y, c1_x, c1_y, c2_x, c2_y, end.x, end.y);
-  return { d, label_x: mid.x, label_y: mid.y };
+  // control points exposed so callers can evaluate any point along the curve
+  const cubic: CubicControlPoints = {
+    x0: start.x,
+    y0: start.y,
+    x1: c1_x,
+    y1: c1_y,
+    x2: c2_x,
+    y2: c2_y,
+    x3: end.x,
+    y3: end.y,
+  };
+  return { d, label_x: mid.x, label_y: mid.y, cubic };
+}
+
+//============================================
+// place_edge_label
+//============================================
+// The fixed parameter samples along the curve, center-first then symmetric
+// outward. Center-first ordering plus a strict-greater comparison in the search
+// makes t = 0.5 the natural winner whenever it is clear, and ties resolve toward
+// the center. The list is the placement contract: callers must not reorder it.
+const LABEL_SAMPLE_TS: number[] = [
+  0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.75, 0.2, 0.8,
+];
+
+// The perpendicular degree of freedom for label placement, in pixels measured
+// along the curve's unit normal at each sampled t. Zero (no sideways shift) is
+// first so a centered, on-curve point wins any clearance tie; the symmetric
+// offsets step the label modestly to either side so near-parallel sibling labels
+// can separate into clear space while staying visually attached to their edge.
+// Magnitudes are small multiples of the label line height to keep that
+// attachment. This list is the placement contract alongside LABEL_SAMPLE_TS:
+// callers must not reorder it (zero-first preserves the no-offset preference).
+const LABEL_NORMAL_OFFSETS_PX: number[] = [
+  0,
+  LABEL_LINE_H_PX,
+  -LABEL_LINE_H_PX,
+  1.6 * LABEL_LINE_H_PX,
+  -1.6 * LABEL_LINE_H_PX,
+];
+
+// Signed clearance between two axis-aligned boxes centered at (ax, ay) and
+// (bx, by) with the given half extents. Positive means the boxes are fully
+// clear by that many pixels (separated on at least one axis); negative means
+// they overlap, and the magnitude is how deep the overlap is. Two AABBs are
+// disjoint exactly when they are separated on either axis, so the signed
+// clearance is the larger of the two per-axis gaps.
+function box_clearance(
+  ax: number,
+  ay: number,
+  a_half_w: number,
+  a_half_h: number,
+  bx: number,
+  by: number,
+  b_half_w: number,
+  b_half_h: number,
+): number {
+  // per-axis gap between the box edges: positive = a wall-to-wall gap exists
+  const gap_x = Math.abs(ax - bx) - (a_half_w + b_half_w);
+  const gap_y = Math.abs(ay - by) - (a_half_h + b_half_h);
+  // boxes clear when separated on either axis, so the wider gap governs
+  const clearance = Math.max(gap_x, gap_y);
+  return clearance;
+}
+
+// Worst (minimum) clearance of a label AABB, centered at (px, py) with the given
+// half extents, against every obstacle box. An empty obstacle set is fully clear
+// (+Infinity). This is the same per-point scoring place_edge_label uses for its
+// candidate search, exposed so the lane-aware layout can reuse one clearance rule
+// rather than re-deriving the AABB math. Pure: no DOM or Solid imports.
+export function label_min_clearance(
+  px: number,
+  py: number,
+  label_half_w: number,
+  label_half_h: number,
+  obstacles: NodeBox[],
+): number {
+  let worst_clearance = Infinity;
+  for (const box of obstacles) {
+    const clearance = box_clearance(
+      px,
+      py,
+      label_half_w,
+      label_half_h,
+      box.x,
+      box.y,
+      box.w / 2,
+      box.h / 2,
+    );
+    if (clearance < worst_clearance) {
+      worst_clearance = clearance;
+    }
+  }
+  return worst_clearance;
+}
+
+// Place a verb label near its edge curve by one uniform rule: choose the point
+// with the maximum clearance from all obstacles, tie-broken toward the centered,
+// on-curve anchor (t = 0.5, no sideways shift). This is a single placement rule
+// applied to every label, not a midpoint with a conditional escape: the label
+// AABB is scored at each candidate point, and the point whose worst (minimum)
+// clearance against all obstacles is largest wins.
+//
+// The candidate set has two degrees of freedom: an ALONG-curve parameter t (the
+// LABEL_SAMPLE_TS list) crossed with a PERPENDICULAR offset (LABEL_NORMAL_OFFSETS_PX)
+// measured along the curve's unit normal at that t. The along-curve freedom alone
+// cannot separate near-parallel sibling edges, because every on-curve sample of
+// both edges lands in the same narrow zone; the perpendicular freedom lets a
+// crowded label step sideways into clear space while staying attached to its edge.
+// Both lists are iterated centered-first (t = 0.5 and offset 0 first) with a
+// strict-greater comparison, so the centered, on-curve point wins whenever it is
+// clear and ties resolve toward it -- one uniform max-clearance rule over a small
+// 2D candidate set. dagre's edge-label sizing spreads the bubbles to create the
+// clear room; this rule places the label into it.
+//
+// Override-aware: obstacles are the live rendered node boxes, so a dragged
+// bubble shifts the obstacle set and the label re-places on the next render.
+//
+// Pure: no DOM or Solid imports. The label size comes from the shared
+// label_wrap module so the wrap math and the placement math cannot drift.
+export function place_edge_label(
+  cubic: CubicControlPoints,
+  verb: string,
+  obstacles: NodeBox[],
+): Point {
+  // wrapped label dimensions plus a small clearance margin form the label AABB
+  const lines = wrap_verb_label(verb);
+  const size = label_box(lines);
+  const label_half_w = size.width / 2 + LABEL_CLEAR_MARGIN_PX;
+  const label_half_h = size.height / 2 + LABEL_CLEAR_MARGIN_PX;
+  // track the best point seen: center-first iteration plus strict-greater means
+  // the most central maximum-clearance point wins any tie
+  let best_point = cubic_point(
+    cubic.x0,
+    cubic.y0,
+    cubic.x1,
+    cubic.y1,
+    cubic.x2,
+    cubic.y2,
+    cubic.x3,
+    cubic.y3,
+    0.5,
+  );
+  let best_score = -Infinity;
+  // iterate the 2D candidate set: each along-curve sample t crossed with each
+  // perpendicular offset. t-first then offset-inner keeps the centered, no-offset
+  // anchor (t = 0.5, offset 0) the first candidate evaluated.
+  for (const t of LABEL_SAMPLE_TS) {
+    // base point on the curve at this parameter
+    const base = cubic_point(
+      cubic.x0,
+      cubic.y0,
+      cubic.x1,
+      cubic.y1,
+      cubic.x2,
+      cubic.y2,
+      cubic.x3,
+      cubic.y3,
+      t,
+    );
+    // unit normal at this t gives the sideways direction for the perpendicular
+    // offsets; a degenerate tangent yields a zero normal, collapsing every offset
+    // at this t to the base point (no spurious sideways jump)
+    const normal = cubic_normal(
+      cubic.x0,
+      cubic.y0,
+      cubic.x1,
+      cubic.y1,
+      cubic.x2,
+      cubic.y2,
+      cubic.x3,
+      cubic.y3,
+      t,
+    );
+    for (const offset of LABEL_NORMAL_OFFSETS_PX) {
+      // candidate point = on-curve base shifted sideways along the unit normal
+      const point = {
+        x: base.x + normal.x * offset,
+        y: base.y + normal.y * offset,
+      };
+      // the candidate's score is its worst (minimum) clearance over all obstacles;
+      // an empty obstacle set leaves the score fully clear (+Infinity)
+      const worst_clearance = label_min_clearance(
+        point.x,
+        point.y,
+        label_half_w,
+        label_half_h,
+        obstacles,
+      );
+      // strict greater keeps the earlier (more central, less offset) point on a tie
+      if (worst_clearance > best_score) {
+        best_score = worst_clearance;
+        best_point = point;
+      }
+    }
+  }
+  return best_point;
 }
 
 //============================================
@@ -305,7 +529,9 @@ export function assign_curvatures(triples: EdgeTriple[]): Map<string, number> {
 // helpers
 //============================================
 // Evaluate a cubic bezier at parameter t, returning the point on the curve.
-function cubic_point(
+// Exported so the post-dagre routing layer can sample any edge's curve without
+// duplicating the Bernstein evaluation; edge_path behavior is unchanged.
+export function cubic_point(
   x0: number,
   y0: number,
   x1: number,
@@ -324,6 +550,60 @@ function cubic_point(
   const w3 = t * t * t;
   const x = w0 * x0 + w1 * x1 + w2 * x2 + w3 * x3;
   const y = w0 * y0 + w1 * y1 + w2 * y2 + w3 * y3;
+  return { x, y };
+}
+
+// Evaluate the cubic bezier derivative (dP/dt) at parameter t, returning the
+// tangent vector. This is the analytic derivative of the Bernstein form, so it
+// points along the curve in the direction of increasing t. The vector is NOT
+// normalized; callers that need a unit direction divide by its length.
+function cubic_tangent(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  t: number,
+): Point {
+  // complementary parameter
+  const mt = 1 - t;
+  // derivative weights: dP/dt = 3*(mt^2*(P1-P0) + 2*mt*t*(P2-P1) + t^2*(P3-P2))
+  const w0 = 3 * mt * mt;
+  const w1 = 6 * mt * t;
+  const w2 = 3 * t * t;
+  const x = w0 * (x1 - x0) + w1 * (x2 - x1) + w2 * (x3 - x2);
+  const y = w0 * (y1 - y0) + w1 * (y2 - y1) + w2 * (y3 - y2);
+  return { x, y };
+}
+
+// Unit normal of the cubic at parameter t: rotate the unit tangent 90 degrees,
+// (tx, ty) -> (-ty, tx). This is the perpendicular (sideways) direction the
+// label placement uses for its perpendicular degree of freedom. A zero-length
+// tangent (degenerate curve at this t) has no defined perpendicular, so the
+// helper returns a zero vector and the caller's offset collapses to no shift.
+function cubic_normal(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  t: number,
+): Point {
+  const tangent = cubic_tangent(x0, y0, x1, y1, x2, y2, x3, y3, t);
+  const length = Math.hypot(tangent.x, tangent.y);
+  // guard a degenerate tangent: no perpendicular is defined, so emit zero
+  if (length === 0) {
+    return { x: 0, y: 0 };
+  }
+  // unit perpendicular: rotate the unit tangent by 90 degrees
+  const x = -tangent.y / length;
+  const y = tangent.x / length;
   return { x, y };
 }
 

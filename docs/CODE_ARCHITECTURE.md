@@ -98,6 +98,11 @@ color values for edges, arrowheads, and node borders/labels.
 - [src/measure_text.ts](../src/measure_text.ts) - pixel-accurate text width measurement
   via a shared offscreen canvas context. Used by the triples table to autosize each column
   to the widest committed value at commit time (not per keystroke).
+- [src/label_wrap.ts](../src/label_wrap.ts) - shared verb/edge label-size source of truth.
+  Exports font constants, `wrap_verb_label` (word-wraps a verb phrase to fit within
+  `LABEL_MAX_LINE_PX`, capping at `LABEL_MAX_LINES`), and `label_box` (returns
+  `{width, height}` for a wrapped-line array). No DOM or Solid imports; imported by
+  `layout_graph.ts` (dagre edge sizing) and `concept_edge.tsx` (multi-line rendering).
 
 ### Codecs and export
 

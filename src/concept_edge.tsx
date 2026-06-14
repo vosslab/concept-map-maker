@@ -14,14 +14,15 @@
 // the stroke to the accent color and switches to the highlight arrowhead marker.
 
 import type { JSX } from "solid-js";
-import { Show } from "solid-js";
+import { For, Show } from "solid-js";
 
 import type { AppState } from "./app_state";
 import type { Triple, ThemeShape } from "./types";
 import { concept_key } from "./types";
-import type { NodeBox, EdgeGeometry } from "./edge_geometry";
+import type { NodeBox, EdgeGeometry, Point } from "./edge_geometry";
 import { edge_path, self_loop_path } from "./edge_geometry";
 import { map_is_dark } from "./ui_theme";
+import { wrap_verb_label, LABEL_LINE_H_PX, LABEL_FONT_SIZE_PX } from "./label_wrap";
 
 // Marker ids defined once in the canvas <defs>; referenced by concept edges via
 // marker-end. Exported so map_canvas owns the matching <marker> elements and the
@@ -50,7 +51,9 @@ const EDGE_HIGHLIGHT_WIDTH = 2.5;
 // Verb label typography. The web-safe stack matches the layout width estimate
 // and the node renderer so labels measure consistently across modules.
 const LABEL_FONT_FAMILY = "Helvetica, Arial, sans-serif";
-const LABEL_FONT_SIZE = "12";
+// Rendered font-size string, taken from the shared label-sizing module so the
+// drawn font and the wrap/placement math cannot drift on a literal.
+const LABEL_FONT_SIZE = String(LABEL_FONT_SIZE_PX);
 const LABEL_COLOR = "#2a2a2a";
 
 // Dark-mode screen variants for the verb label. The light halo ("#ffffff") is
@@ -74,6 +77,12 @@ export interface ConceptEdgeProps {
   curvature: number;
   from_box: NodeBox;
   to_box: NodeBox;
+  // The resolved label anchor for this edge, computed by the centralized label
+  // placement pass (src/label_layout.ts) over the whole edge set so labels avoid
+  // both node bubbles AND each other. The canvas recomputes the pass from its
+  // live node_boxes memo, so a dragged bubble re-places every label (override-
+  // aware). Empty-verb edges render no label; their value here is unused.
+  label_pos: Point;
 }
 
 //============================================
@@ -97,6 +106,11 @@ export function ConceptEdge(props: ConceptEdgeProps): JSX.Element {
     }
     return edge_path(props.from_box, props.to_box, shape(), props.curvature);
   };
+
+  // label anchor: resolved by the centralized placement pass and handed in as a
+  // prop. The pass scores every label against node bubbles AND already-placed
+  // labels, so this anchor already avoids label-vs-label overprint.
+  const label_pos = (): Point => props.label_pos;
 
   // highlight membership: this triple is emphasized when the hover-derived set
   // contains its id (row hover, edge hover, or node hover on an endpoint)
@@ -124,6 +138,10 @@ export function ConceptEdge(props: ConceptEdgeProps): JSX.Element {
     props.state.set_hover({ source: null, tripleId: null, conceptKey: null });
   };
 
+  // Reactive accessor: wrap the verb into an array of display lines.
+  // Returns [] for empty/whitespace verbs (Show guard below handles that case).
+  const lines = (): string[] => wrap_verb_label(props.triple.verb);
+
   return (
     <g data-edge-id={props.triple.id}>
       {/* The visible curved path with an arrowhead marker at its target end. */}
@@ -141,12 +159,20 @@ export function ConceptEdge(props: ConceptEdgeProps): JSX.Element {
         onPointerEnter={on_enter}
         onPointerLeave={on_leave}
       />
-      {/* Verb label at the curve midpoint, with a white stroke halo painted
-          behind the fill via paint-order so it stays readable over edges. */}
+      {/* Verb label at the maximum-clearance point along the curve, with a white
+          stroke halo painted behind the fill via paint-order so it stays
+          readable over edges. Multi-line: one <tspan> per wrapped line,
+          vertically centered on the placed y. The <text> anchor and stroke
+          attributes are inherited by each tspan so the halo renders per-line via
+          paint-order="stroke".
+          The anchor comes from the centralized label placement pass
+          (src/label_layout.ts), which treats node boxes AND already-placed
+          labels as obstacles, so sibling and parallel labels avoid each other by
+          construction rather than overprinting. */}
       <Show when={props.triple.verb.trim().length > 0}>
         <text
-          x={geometry().label_x}
-          y={geometry().label_y}
+          x={label_pos().x}
+          y={label_pos().y}
           text-anchor="middle"
           dominant-baseline="middle"
           font-family={LABEL_FONT_FAMILY}
@@ -157,7 +183,25 @@ export function ConceptEdge(props: ConceptEdgeProps): JSX.Element {
           paint-order="stroke"
           pointer-events="none"
         >
-          {props.triple.verb}
+          {/* Each line gets a <tspan> with an explicit x to re-center it.
+              dy positions the block: the first line shifts up by half the total
+              block height above label_y so the block is centered; each subsequent
+              line advances one LABEL_LINE_H_PX below the previous. */}
+          <For each={lines()}>
+            {(line, index) => {
+              // First line: shift up so the whole block is vertically centered.
+              // Subsequent lines: advance one line-height down.
+              const dy =
+                index() === 0
+                  ? `${(-(lines().length - 1) / 2) * LABEL_LINE_H_PX}`
+                  : `${LABEL_LINE_H_PX}`;
+              return (
+                <tspan x={label_pos().x} dy={dy}>
+                  {line}
+                </tspan>
+              );
+            }}
+          </For>
         </text>
       </Show>
     </g>

@@ -60,6 +60,9 @@ Pure modules (no Solid imports, node-testable):
   [src/measure_text.ts](../src/measure_text.ts)
 - [src/themes.ts](../src/themes.ts) - shape registry; re-exports palettes from `palettes.ts`
 - [src/palettes.ts](../src/palettes.ts) - bubble color `PALETTES` registry and `depth_fill` helper
+- [src/label_wrap.ts](../src/label_wrap.ts) - shared verb/edge label-size source of truth
+  (constants + `wrap_verb_label` + `label_box`; no DOM/Solid); imported by
+  `layout_graph.ts` (dagre sizing) and `concept_edge.tsx` (wrapping)
 
 Codecs and export:
 - [src/document_codec.ts](../src/document_codec.ts),

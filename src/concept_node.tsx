@@ -116,8 +116,9 @@ const RING_WIDTH = 3;
 export interface ConceptNodeProps {
   // The concept identity this bubble renders (also used as the visible label).
   conceptKey: ConceptKey;
-  // Center-based geometry from the canvas layout slot.
-  box: NodeBox;
+  // Center-based geometry from the canvas layout slot, passed as a reactive
+  // accessor so attributes patch in place across drag moves (the <g> persists).
+  box: () => NodeBox;
   // The shared reactive app state (theme, depths, hover, overrides).
   state: AppState;
 }
@@ -170,7 +171,7 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
     }
     target.setPointerCapture(e.pointerId);
     dragging = true;
-    grab_offset = { x: local.x - props.box.x, y: local.y - props.box.y };
+    grab_offset = { x: local.x - props.box().x, y: local.y - props.box().y };
   }
 
   // pointermove: while dragging, write the new center (pointer minus grab offset)
@@ -252,10 +253,10 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
     if (shape_spec().is_ellipse) {
       return (
         <ellipse
-          cx={props.box.x}
-          cy={props.box.y}
-          rx={props.box.w / 2}
-          ry={props.box.h / 2}
+          cx={props.box().x}
+          cy={props.box().y}
+          rx={props.box().w / 2}
+          ry={props.box().h / 2}
           fill={fill()}
           stroke={stroke_color()}
           stroke-width={stroke_width()}
@@ -264,13 +265,13 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
     }
     // capsule: stadium shape with rx = ry = half the node height (fully rounded ends)
     if (shape_spec().is_capsule) {
-      const cap_r = props.box.h / 2;
+      const cap_r = props.box().h / 2;
       return (
         <rect
-          x={props.box.x - props.box.w / 2}
-          y={props.box.y - props.box.h / 2}
-          width={props.box.w}
-          height={props.box.h}
+          x={props.box().x - props.box().w / 2}
+          y={props.box().y - props.box().h / 2}
+          width={props.box().w}
+          height={props.box().h}
           rx={cap_r}
           ry={cap_r}
           fill={fill()}
@@ -282,10 +283,10 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
     // rect / rounded-rect: convert center-based box to top-left origin
     return (
       <rect
-        x={props.box.x - props.box.w / 2}
-        y={props.box.y - props.box.h / 2}
-        width={props.box.w}
-        height={props.box.h}
+        x={props.box().x - props.box().w / 2}
+        y={props.box().y - props.box().h / 2}
+        width={props.box().w}
+        height={props.box().h}
         rx={shape_spec().corner_radius}
         ry={shape_spec().corner_radius}
         fill={fill()}
@@ -306,10 +307,10 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
     if (shape_spec().is_ellipse) {
       return (
         <ellipse
-          cx={props.box.x}
-          cy={props.box.y}
-          rx={props.box.w / 2 + RING_PAD}
-          ry={props.box.h / 2 + RING_PAD}
+          cx={props.box().x}
+          cy={props.box().y}
+          rx={props.box().w / 2 + RING_PAD}
+          ry={props.box().h / 2 + RING_PAD}
           fill="none"
           stroke={color}
           stroke-width={RING_WIDTH}
@@ -318,13 +319,13 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
     }
     // capsule highlight ring: match the capsule rx = ry = half height, plus RING_PAD
     if (shape_spec().is_capsule) {
-      const cap_r = props.box.h / 2 + RING_PAD;
+      const cap_r = props.box().h / 2 + RING_PAD;
       return (
         <rect
-          x={props.box.x - props.box.w / 2 - RING_PAD}
-          y={props.box.y - props.box.h / 2 - RING_PAD}
-          width={props.box.w + RING_PAD * 2}
-          height={props.box.h + RING_PAD * 2}
+          x={props.box().x - props.box().w / 2 - RING_PAD}
+          y={props.box().y - props.box().h / 2 - RING_PAD}
+          width={props.box().w + RING_PAD * 2}
+          height={props.box().h + RING_PAD * 2}
           rx={cap_r}
           ry={cap_r}
           fill="none"
@@ -335,10 +336,10 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
     }
     return (
       <rect
-        x={props.box.x - props.box.w / 2 - RING_PAD}
-        y={props.box.y - props.box.h / 2 - RING_PAD}
-        width={props.box.w + RING_PAD * 2}
-        height={props.box.h + RING_PAD * 2}
+        x={props.box().x - props.box().w / 2 - RING_PAD}
+        y={props.box().y - props.box().h / 2 - RING_PAD}
+        width={props.box().w + RING_PAD * 2}
+        height={props.box().h + RING_PAD * 2}
         rx={shape_spec().corner_radius + RING_PAD}
         ry={shape_spec().corner_radius + RING_PAD}
         fill="none"
@@ -367,8 +368,8 @@ export function ConceptNode(props: ConceptNodeProps): JSX.Element {
       {/* Centered black label (the concept key). Inline font attributes keep the
           export self-contained; pointer-events none lets drags target the shape. */}
       <text
-        x={props.box.x}
-        y={props.box.y}
+        x={props.box().x}
+        y={props.box().y}
         fill={label_fill()}
         font-family={LABEL_FONT}
         font-size={LABEL_FONT_SIZE}

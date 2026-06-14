@@ -143,6 +143,81 @@ test("blank and partial rows are excluded from the layout", () => {
   assert.ok(layout.nodes.get("target"));
 });
 
+//============================================
+// edge label sizing widens layout
+//============================================
+
+test("long multi-word verb widens overall layout vs single-char verb", () => {
+  // A single-char verb produces a tiny edge label; dagre reserves very little
+  // space. A long multi-word verb wraps and its label_box width is larger, so
+  // dagre must push sibling nodes further apart to fit the label.
+  // Exact pixel widths depend on dagre internals and label constants, so we
+  // avoid comparing against a hardcoded number. Instead we assert the invariant
+  // the feature protects: the long-verb layout must be strictly wider by a
+  // meaningful margin (at least 10 units), not merely by floating-point noise.
+  const triples_short = [
+    { id: "1", from: "Alpha", verb: "x", to: "Beta" },
+    { id: "2", from: "Alpha", verb: "x", to: "Gamma" },
+  ];
+  const triples_long = [
+    { id: "1", from: "Alpha", verb: "has a very long relationship with", to: "Beta" },
+    { id: "2", from: "Alpha", verb: "has a very long relationship with", to: "Gamma" },
+  ];
+  const layout_short = compute_layout(triples_short);
+  const layout_long = compute_layout(triples_long);
+  const margin = 10;
+  assert.ok(
+    layout_long.width >= layout_short.width + margin,
+    `long-verb layout width (${layout_long.width}) should exceed short-verb (${layout_short.width}) by at least ${margin} units`,
+  );
+});
+
+//============================================
+// multi-word concept keys in edges (B1 regression)
+//============================================
+
+test("multi-word concept key in edge is registered and ranked by dagre", () => {
+  // Guards that edges between multi-word concept keys are registered with dagre
+  // and cause dagre to apply top-down (TB) ranking to their endpoints.
+  //
+  // The B1 regression: edge identity was derived by string-splitting on a
+  // delimiter that could occur inside a multi-word key (e.g. splitting
+  // "new york leads to big apple" on the first space produced phantom keys
+  // "new" and "york leads to big apple"). The phantom keys did not match any
+  // node, so dagre never saw the edge, treated all nodes as unranked peers,
+  // and the child node's y was not strictly below the parent's.
+  //
+  // After the fix, from_key and to_key are stored as structured fields on each
+  // triple, so edges with multi-word concept keys are always registered and
+  // dagre applies the expected top-down ordering. The assertion below (strict
+  // y inequality) would fail on the pre-fix code when any concept key contains
+  // an internal space.
+  const triples = [
+    { id: "1", from: "new york", verb: "leads to", to: "big apple" },
+    { id: "2", from: "big apple", verb: "leads to", to: "tourism" },
+  ];
+  const layout = compute_layout(triples);
+  // all three multi-word nodes must be present
+  assert.equal(layout.nodes.size, 3, "expected 3 nodes");
+  const new_york = layout.nodes.get("new york");
+  const big_apple = layout.nodes.get("big apple");
+  const tourism = layout.nodes.get("tourism");
+  assert.ok(new_york, "new york node missing");
+  assert.ok(big_apple, "big apple node missing");
+  assert.ok(tourism, "tourism node missing");
+  // TB layout: y increases downward. If the multi-word edges were dropped, dagre
+  // treats all nodes as isolated and may assign them the same y rank, so the
+  // strict inequality below would fail on the pre-fix code.
+  assert.ok(
+    new_york.y < big_apple.y,
+    `new york (y=${new_york.y}) should be above big apple (y=${big_apple.y}) -- edge registration required`,
+  );
+  assert.ok(
+    big_apple.y < tourism.y,
+    `big apple (y=${big_apple.y}) should be above tourism (y=${tourism.y}) -- edge registration required`,
+  );
+});
+
 test("concepts differing only in casing or whitespace share one node", () => {
   const triples = [
     { id: "1", from: "Cell", verb: "is", to: "Unit" },

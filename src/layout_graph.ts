@@ -26,6 +26,31 @@ interface DagreNodeLabel {
   [key: string]: unknown;
 }
 
+// Shape of the label size object attached to each edge in the dagre graph.
+// dagre uses width/height to reserve rank and sibling separation around the
+// label; labelpos tells dagre where the label sits on the arc ("c" = center).
+// The index signature satisfies graphlib's EdgeLabel constraint.
+// Verb labels are rendered at bezier midpoints by concept_edge.tsx; dagre does
+// not render them, but uses these dimensions to spread bubbles so labels no
+// longer overlap a bubble.
+interface DagreEdgeLabel {
+  width?: number;
+  height?: number;
+  // dagre accepts "c" (center), "l" (left), or "r" (right) for label placement
+  labelpos?: "c" | "l" | "r";
+  [key: string]: unknown;
+}
+
+// Structured entry stored in edge_labels during the two-pass edge dedup.
+// Keeps from_key and to_key as structured fields so pass 2 never needs to
+// reconstruct them by splitting a composite string on whitespace -- which
+// breaks when concept keys contain internal spaces (e.g. "new york").
+interface EdgeLabelEntry {
+  from_key: ConceptKey;
+  to_key: ConceptKey;
+  label: DagreEdgeLabel;
+}
+
 // Typed shapes for dagre return values whose public types are `any`-flavored.
 // dagre's g.node() and g.graph() return plain objects with numeric layout fields;
 // these interfaces capture the subset we actually read.
@@ -81,6 +106,7 @@ function as_dagre_graph_label(raw: unknown): DagreGraphLabel {
 
 import type { Triple, ConceptKey } from "./types";
 import { concept_key } from "./types";
+import { wrap_verb_label, label_box } from "./label_wrap";
 
 // One laid-out bubble. x and y are the CENTER of the bubble (dagre's
 // convention); w and h are its full width and height. label is the display
@@ -126,12 +152,26 @@ const MIN_NODE_WIDTH_PX = 56;
 // height is constant; only the width varies with label length.
 const NODE_HEIGHT_PX = 36;
 
-// Vertical gap between adjacent rank layers (TB direction). Roomy enough that
-// verb labels rendered later at edge midpoints have space between layers.
-const RANK_SEP_PX = 60;
+// Base vertical gap between adjacent rank layers (TB direction). Dagre adds each
+// edge's reserved label height (from label_box) on top of this value, so
+// multi-line verb labels still get the room they need while short-verb edges
+// become much tighter than the old 60 px base allowed. Keep this small so
+// vertical line lengths stay short -- vertical spacing is a user-comfort concern.
+const RANK_SEP_PX = 30;
 
-// Horizontal gap between sibling nodes within the same rank.
-const NODE_SEP_PX = 40;
+// Base horizontal gap between sibling nodes within the same rank. Larger values
+// widen the gap between same-rank items, but interact non-monotonically with
+// dagre's ordering pass -- increasing it can pull intermediate nodes closer to
+// bypass center lines rather than further away. The durable lever for clearing
+// intermediate nodes off bypass lines is EDGE_LABEL_WIDTH_MARGIN_PX (and the
+// post-dagre edge_routing layer), not this constant.
+const NODE_SEP_PX = 55;
+
+// Extra horizontal margin added to each edge label's width before handing it to
+// dagre. Widening the reserved label lane pushes an intermediate node further
+// off the bypass center line; this is the primary separation lever for keeping
+// intermediate bubbles clear of labelled bypass edges.
+const EDGE_LABEL_WIDTH_MARGIN_PX = 48;
 
 //============================================
 // estimate_node_width
@@ -197,15 +237,16 @@ function is_complete_row(triple: Triple): boolean {
 // build_graph
 //============================================
 // Assemble a dagre graph from the concept map. Nodes are sized by label length;
-// edges carry no label (verb labels are rendered later at bezier midpoints by
-// edge_geometry, so dagre must not reserve rank space for them). Self-loops and
-// duplicate edges are deduplicated by (from, to) key so dagre sees one edge per
-// ordered concept pair.
+// edges carry the wrapped verb label size so dagre reserves rank and sibling
+// separation around them. Verb labels are rendered at bezier midpoints by
+// concept_edge.tsx; dagre does not render them, but uses width/height to spread
+// bubbles so labels no longer overlap a bubble. Self-loops and duplicate edges
+// are deduplicated by (from, to) key so dagre sees one edge per ordered pair.
 function build_graph(
   triples: Triple[],
   labels: Map<ConceptKey, string>,
-): Graph<GraphLabel, DagreNodeLabel, Record<string, never>> {
-  const graph = new dagre.graphlib.Graph<GraphLabel, DagreNodeLabel, Record<string, never>>();
+): Graph<GraphLabel, DagreNodeLabel, DagreEdgeLabel> {
+  const graph = new dagre.graphlib.Graph<GraphLabel, DagreNodeLabel, DagreEdgeLabel>();
   // top-down layered layout with greedy cycle breaking; constants documented above
   graph.setGraph({
     rankdir: "TB",
@@ -213,8 +254,8 @@ function build_graph(
     ranksep: RANK_SEP_PX,
     nodesep: NODE_SEP_PX,
   });
-  // dagre requires a default edge label even though we attach none
-  graph.setDefaultEdgeLabel(() => ({}));
+  // dagre requires a default edge label; empty object is fine as a fallback
+  graph.setDefaultEdgeLabel((): DagreEdgeLabel => ({}));
   // add every concept as a sized node, keyed by its normalized concept key
   for (const [key, label] of labels) {
     graph.setNode(key, {
@@ -223,26 +264,56 @@ function build_graph(
       height: NODE_HEIGHT_PX,
     });
   }
-  // add one edge per unique ordered concept pair from complete rows
-  const seen_edges = new Set<string>();
+  // For each unique ordered concept pair, find the widest verb label across all
+  // complete rows that share that pair. We take the label with the greatest
+  // width; tie-break on height. This gives dagre the worst-case label size so
+  // it reserves enough rank/sibling space regardless of which verb is rendered.
+  //
+  // edge_id is still used as a dedup key (stable string per ordered pair), but
+  // from_key and to_key are stored as structured fields so pass 2 never needs to
+  // reconstruct them by splitting on whitespace -- which breaks when a concept
+  // key contains internal spaces (e.g. "new york").
+  const edge_labels = new Map<string, EdgeLabelEntry>();
   for (const triple of triples) {
     if (!is_complete_row(triple)) {
       continue;
     }
     const from_key = concept_key(triple.from);
     const to_key = concept_key(triple.to);
-    // a "self" edge (from and to normalize equal) is drawn as a self-loop by
-    // edge_geometry, not ranked by dagre, so skip it here
+    // self-loops are drawn by edge_geometry.self_loop_path; skip for dagre ranking
     if (from_key === to_key) {
       continue;
     }
-    // deduplicate parallel edges so dagre lays out one arc per concept pair
-    const edge_id = from_key + " " + to_key;
-    if (seen_edges.has(edge_id)) {
-      continue;
+    const edge_id = from_key + "\0" + to_key;
+    // compute the bounding box for this row's wrapped verb
+    const lines = wrap_verb_label(triple.verb);
+    const box = label_box(lines);
+    const current = edge_labels.get(edge_id);
+    const current_label = current?.label;
+    // keep the label whose box is widest; tie-break on height for vertical safety
+    if (
+      current === undefined ||
+      box.width > (current_label?.width ?? 0) ||
+      (box.width === (current_label?.width ?? 0) && box.height > (current_label?.height ?? 0))
+    ) {
+      // add horizontal margin so dagre's reserved lane is wide enough that an
+      // intermediate node at the same rank clears the bypass edge center line
+      edge_labels.set(edge_id, {
+        from_key,
+        to_key,
+        label: {
+          width: box.width + EDGE_LABEL_WIDTH_MARGIN_PX,
+          height: box.height,
+          labelpos: "c",
+        },
+      });
     }
-    seen_edges.add(edge_id);
-    graph.setEdge(from_key, to_key);
+  }
+  // add one edge per unique ordered concept pair, carrying its wrapped label size
+  // from_key and to_key are read directly from the structured entry -- no string
+  // splitting needed, so multi-word concept keys are safe.
+  for (const entry of edge_labels.values()) {
+    graph.setEdge(entry.from_key, entry.to_key, entry.label);
   }
   return graph;
 }

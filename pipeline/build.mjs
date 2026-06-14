@@ -52,7 +52,9 @@ function copy_assets() {
   // build fails loudly rather than producing a dist/ with broken icons.
   const vendor_src = path.join(ROOT, "vendor", "fontawesome");
   if (!fs.existsSync(vendor_src)) {
-    throw new Error(`Required directory missing: ${vendor_src}. Add vendor/fontawesome/ before building.`);
+    throw new Error(
+      `Required directory missing: ${vendor_src}. Add vendor/fontawesome/ before building.`,
+    );
   }
   copy_dir(vendor_src, path.join(ROOT, "dist", "vendor", "fontawesome"));
   // .nojekyll ensures GitHub Pages serves files whose names start with _.
