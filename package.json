@@ -22,17 +22,17 @@
 		"@types/node": ">=25.9.3",
 		"esbuild": ">=0.28.1",
 		"esbuild-plugin-solid": ">=0.6.0",
-		"@babel/core": ">=7.29.7",
+		"@babel/core": ">=8.0.0",
 		"babel-preset-solid": ">=1.9.12",
-		"@babel/preset-typescript": ">=7.29.7",
+		"@babel/preset-typescript": ">=8.0.0",
 		"typescript": ">=6.0.3",
-		"eslint": ">=9.39.4 <10",
-		"@eslint/js": ">=9.39.4 <10",
-		"typescript-eslint": ">=8.61.0",
+		"eslint": ">=10.5.0",
+		"@eslint/js": ">=10.0.1",
+		"typescript-eslint": ">=8.61.1",
 		"eslint-plugin-solid": ">=0.14.5",
 		"globals": ">=17.6.0",
 		"prettier": ">=3.8.4",
 		"tsx": ">=4.22.4",
-		"@playwright/test": ">=1.60.0"
+		"@playwright/test": ">=1.61.0"
 	}
 }
