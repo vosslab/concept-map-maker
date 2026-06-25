@@ -1,7 +1,7 @@
 // app.tsx - top-level app shell: toolbar strip, editor pane (Triples tab),
 // map pane, and rubric panel.
 
-import { createSignal, onMount, onCleanup } from "solid-js";
+import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import type { JSX } from "solid-js";
 
 import { create_app_state, browser_storage } from "./app_state";
@@ -13,6 +13,7 @@ import { ThemePicker } from "./theme_picker";
 import { RubricPanel } from "./rubric_panel";
 import { Toolbar } from "./toolbar";
 import { setup_map_theme, set_exporting_light } from "./ui_theme";
+import { EmptyState } from "./empty_state";
 
 // ============================================
 // Resizer constants
@@ -294,6 +295,11 @@ export function App(): JSX.Element {
             node_slot={(key, box) => <ConceptNode conceptKey={key} box={box} state={state} />}
             svg_ref={(el) => set_svg_el(el)}
           />
+          {/* Empty-state panel: shown only when the document has no triples.
+              Hides automatically once the first triple is added. */}
+          <Show when={state.doc.triples.length === 0}>
+            <EmptyState state={state} />
+          </Show>
         </section>
       </main>
 

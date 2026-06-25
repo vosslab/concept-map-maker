@@ -107,3 +107,14 @@ Run a single E2E test:
 ```bash
 source source_me.sh && python3 tests/meta/e2e/e2e_reset_routing.py
 ```
+
+## Concept map app
+
+Open `index.html` in a browser (or run `bash run_web_server.sh` for local dev) to use the app.
+
+### Examples picker
+
+The toolbar includes an **Examples** group with three prefilled concept maps (Honeybees, Water
+cycle, Photosynthesis). Click any button to load that map; if the current map has triples you will
+be asked to confirm before the existing content is replaced. The same three buttons appear in the
+empty-state panel shown when the map has no triples.

@@ -1,10 +1,12 @@
-/* map.css - map pane, map pane header, and theme picker controls */
+/* map.css - map pane, map pane header, theme picker controls, and empty-state panel */
 
 /* ============================================================
    Map pane (~60% remaining width)
    ============================================================ */
 .map-pane {
   flex: 1 1 0;
+  /* position: relative allows the empty-state panel to use absolute centering */
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
@@ -54,4 +56,129 @@
   border-radius: var(--control-radius);
   background: var(--color-surface);
   color: var(--color-text);
+}
+
+/* ============================================================
+   Empty-state panel (shown inside map pane when doc has no triples)
+   ============================================================ */
+
+/* Centered overlay container inside the map pane. Overlaid via absolute
+   positioning so the canvas and toolbar remain reachable below/around it.
+   Not a blocking modal: no backdrop, no focus trap. */
+.empty-state-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: min(420px, 90%);
+  padding: 28px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  text-align: center;
+  /* Sit above the canvas SVG (z-index 0) but below any modals */
+  z-index: 10;
+}
+
+.empty-state-heading {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-heading);
+}
+
+.empty-state-subheading {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+/* Monospace pill that shows the from -> relationship -> to model inline */
+.empty-state-model {
+  display: inline-block;
+  margin-top: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--control-radius);
+  color: var(--color-heading);
+}
+
+/* Template button list: stacked, full-width inside the panel */
+.empty-state-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Primary template action button: left-aligned label + description stacked */
+.empty-state-template-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--from-tint);
+  border: 1px solid var(--from-accent);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  text-align: left;
+  transition: filter 0.1s ease;
+}
+
+.empty-state-template-btn:hover,
+.empty-state-template-btn:focus-visible {
+  filter: brightness(0.95);
+  outline: 2px solid var(--from-accent);
+  outline-offset: 1px;
+}
+
+.empty-state-template-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-heading);
+}
+
+.empty-state-template-desc {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+/* Divider row separating primary and secondary actions */
+.empty-state-blank-row {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Secondary "Start blank" button: understated, clearly separate from templates */
+.empty-state-blank-btn {
+  padding: 6px 18px;
+  font-size: 13px;
+  color: var(--color-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  transition: color 0.1s ease, border-color 0.1s ease;
+}
+
+.empty-state-blank-btn:hover,
+.empty-state-blank-btn:focus-visible {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+  outline: 2px solid var(--color-muted);
+  outline-offset: 1px;
 }

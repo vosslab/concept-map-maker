@@ -1,5 +1,61 @@
 # Changelog
 
+## 2026-06-25
+
+### Additions and New Features
+
+- `src/templates.ts`: new template data module exporting `TemplateEntry` interface and `TEMPLATES`
+  array with three inline `CmapDocument` objects (Honeybees 8 triples, Water cycle 9 triples,
+  Photosynthesis 9 triples); pure data module, no Solid or DOM imports.
+- `src/template_actions.ts`: shared `load_template` action with overwrite guard
+  (`window.confirm` on non-empty maps) and codec round-trip clone; injectable confirm parameter
+  for testability.
+- `src/empty_state.tsx` + `src/app.tsx` + `src/css/map.css`: inviting overlay panel in the map
+  pane shown when the document has no triples; explanatory heading/subheading teaching the
+  concept -> relationship -> concept model, three template buttons as primary actions, and a
+  secondary "Start blank" button that adds a row and focuses the from-cell input; wired into
+  `app.tsx` behind `<Show when={state.doc.triples.length === 0}>`; not a blocking modal.
+- `src/toolbar.tsx`: new Examples toolbar group rendering TEMPLATES as native buttons via `<For>`,
+  each calling `load_template`; keyboard operable; non-empty overwrite confirm delegated to
+  `load_template`.
+
+### Behavior or Interface Changes
+
+- Loading a template (from the empty-state panel or the toolbar Examples group) over a map that
+  already has triples now prompts `Replace the current concept map?` before replacing; canceling
+  leaves the existing map unchanged. Loading into an empty map replaces silently.
+
+### Fixes and Maintenance
+
+- `package.json`: fixed dependency version ranges that broke `npm install` with an `ERESOLVE`
+  peer-dependency conflict. The `>=` floors floated to majors the Solid toolchain cannot use:
+  `@babel/core`/`@babel/preset-typescript` `>=8.0.0` (but `babel-preset-solid@1.9.12` peers
+  `@babel/core ^7`) and `eslint`/`@eslint/js` `>=10.x` (but `eslint-plugin-solid@0.14.5` peers
+  `eslint <=^9`). Switched all ranges from unbounded `>=` floors to explicit
+  `>=lower <next-major` bounds so a major cannot float past a peer constraint: babel
+  `>=7.29.7 <8.0.0`, eslint and `@eslint/js` `>=9.39.4 <10.0.0`, `typescript`
+  `>=6.0.3 <6.1.0` (`typescript-eslint@8.62` peers `typescript <6.1.0`); all other deps bumped
+  to their newest published version with the same bounded style (`@types/node >=26.0.1 <27.0.0`,
+  `typescript-eslint >=8.62.0 <9.0.0`, etc.). `npm install` resolves clean (0 vulnerabilities)
+  and `check_codebase.sh` passes all 5 checks.
+
+- `.github/workflows/deploy-pages.yml`: bumped GitHub Actions to their latest majors --
+  `actions/checkout@v7`, `actions/setup-node@v6`, `actions/configure-pages@v6`,
+  `actions/upload-pages-artifact@v5`, `actions/deploy-pages@v5`. Kept the existing job structure
+  (`npm ci`, npm cache, `path: dist`).
+
+### Developer Tests and Notes
+
+- `tests/test_templates.mjs`: Node tests validating template data (round-trip through
+  serialize/parse, non-empty triples, unique triple ids, concept_key dedup > 1 concept,
+  unique TEMPLATES entry ids) plus three `load_template` overwrite-guard tests exercising the
+  injectable `confirm_fn` (empty map replaces without prompting; non-empty map cancel preserves;
+  non-empty map accept replaces).
+- `tests/playwright/empty_state.spec.ts`: six browser tests covering empty-state panel
+  visibility, template loading via panel and toolbar, "Start blank" row-add and from-cell focus,
+  toolbar Clear reset, and toolbar overwrite cancel/accept flows (Playwright/Chromium).
+  Positive transitions use auto-retrying `expect()` waits instead of fixed sleeps.
+
 ## 2026-06-13
 
 ### Fixes and Maintenance

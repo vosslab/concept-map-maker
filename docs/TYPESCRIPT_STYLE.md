@@ -4,7 +4,7 @@ Language Model guide to Neil TypeScript programming
 
 ## TypeScript version
 
-* Require `5.x` (latest stable, loose-pinned via devDependencies; no version lock-in beyond floor `>=9` for ESLint).
+* Require `6.x` (latest stable line in use). Pin every dependency with an explicit `>=lower <next-major` range so a major cannot float past a peer constraint: for example ESLint is held at `>=9.39.4 <10.0.0` because `eslint-plugin-solid` does not yet support ESLint 10, and Babel at `>=7.29.7 <8.0.0` because `babel-preset-solid` peers `@babel/core ^7`.
 * Required strict flags: `strict: true`, `noImplicitAny: true`, `noUncheckedIndexedAccess: true`, `target: es2020`, `module: esnext`, `moduleResolution: bundler`.
 * Point at canonical `tsconfig.json` at repo root (propagated from `templates/typescript/tsconfig.json`).
 

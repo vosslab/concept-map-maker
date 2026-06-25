@@ -20,8 +20,8 @@ and autosaves to localStorage. There is no backend; the production build is a st
   nudge by 2%; ratio persists to `localStorage["concept-map-maker:editor-ratio"]`. Also
   calls `setup_map_theme()` on mount to wire the MutationObserver that keeps the map
   light/dark signal in sync with the `data-ui-theme` attribute.
-- [src/toolbar.tsx](../src/toolbar.tsx) - ribbon toolbar with three labeled groups (File,
-  CSV, Image & Print) plus a standalone appearance toggle (sun/moon icon with "Light"/"Dark"
+- [src/toolbar.tsx](../src/toolbar.tsx) - ribbon toolbar with four labeled groups (File,
+  CSV, Image & Print, Examples) plus a standalone appearance toggle (sun/moon icon with "Light"/"Dark"
   text label). Each button carries a Font Awesome solid glyph
   (`aria-hidden="true"`) plus a text label. Icons are served from the vendored
   `vendor/fontawesome/` assets (fa-solid.min.css + fa-solid-900.woff2); no CDN
@@ -35,6 +35,13 @@ and autosaves to localStorage. There is no backend; the production build is a st
 - [src/concept_autocomplete.tsx](../src/concept_autocomplete.tsx) - concept-label
   autocomplete for from/to inputs.
 - [src/theme_picker.tsx](../src/theme_picker.tsx) - bubble shape and palette selector.
+- [src/empty_state.tsx](../src/empty_state.tsx) - inviting overlay panel shown in the map
+  pane when the document has no triples; offers one-click template buttons plus a secondary
+  "Start blank". Non-modal; hidden once the first triple exists.
+- [src/template_actions.ts](../src/template_actions.ts) - shared `load_template` action called
+  by both the empty-state panel and the toolbar Examples group. Owns the overwrite guard
+  (`window.confirm` on non-empty maps) and clones the template through the codec round-trip
+  before `replace_document`.
 - [src/ui_theme_toggle.tsx](../src/ui_theme_toggle.tsx) - toolbar button that cycles the
   UI appearance between Light and Dark; persists the choice to localStorage.
 
@@ -95,6 +102,8 @@ color values for edges, arrowheads, and node borders/labels.
   existing importers continue to work unchanged.
 - [src/palettes.ts](../src/palettes.ts) - bubble color palette data (`PALETTES` registry,
   `depth_fill` helper). Pure data module; no Solid or DOM imports.
+- [src/templates.ts](../src/templates.ts) - prefilled example concept maps (`TemplateEntry`,
+  `TEMPLATES`) as inline `CmapDocument` objects. Pure data module; no Solid or DOM imports.
 - [src/measure_text.ts](../src/measure_text.ts) - pixel-accurate text width measurement
   via a shared offscreen canvas context. Used by the triples table to autosize each column
   to the widest committed value at commit time (not per keystroke).

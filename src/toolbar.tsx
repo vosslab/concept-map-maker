@@ -2,7 +2,7 @@
 // autosave status indicator, CSV import/export, SVG/PNG/print export,
 // and UI theme toggle.
 
-import { createSignal, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import type { Accessor, JSX } from "solid-js";
 
 import type { AppState } from "./app_state";
@@ -10,6 +10,8 @@ import { serialize_document, parse_document, empty_document } from "./document_c
 import { serialize_triples_csv, parse_triples_csv } from "./csv_codec";
 import { download_svg, download_png } from "./export_svg";
 import { UiThemeToggle } from "./ui_theme_toggle";
+import { TEMPLATES } from "./templates";
+import { load_template } from "./template_actions";
 
 //============================================
 // Toolbar
@@ -303,6 +305,27 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
             <i class="fa-solid fa-print" aria-hidden="true" />
             Print
           </button>
+        </span>
+      </span>
+
+      {/* --- EXAMPLES GROUP --- */}
+      <span class="toolbar-group" role="group" aria-labelledby="tg-caption-examples">
+        <span class="toolbar-group-caption" id="tg-caption-examples">
+          Examples
+        </span>
+        <span class="toolbar-group-buttons">
+          <For each={TEMPLATES}>
+            {(entry) => (
+              <button
+                class="toolbar-btn"
+                aria-label={`Load example: ${entry.label}`}
+                onClick={() => load_template(state, entry)}
+              >
+                <i class="fa-solid fa-map" aria-hidden="true" />
+                {entry.label}
+              </button>
+            )}
+          </For>
         </span>
       </span>
 

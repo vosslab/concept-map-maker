@@ -42,6 +42,11 @@ Components (`.tsx`):
 - [src/rubric_panel.tsx](../src/rubric_panel.tsx), [src/theme_picker.tsx](../src/theme_picker.tsx),
   [src/concept_autocomplete.tsx](../src/concept_autocomplete.tsx)
 - [src/ui_theme_toggle.tsx](../src/ui_theme_toggle.tsx) - toolbar light/dark switch
+- [src/empty_state.tsx](../src/empty_state.tsx) - empty-map overlay with template buttons
+
+Shared actions:
+- [src/template_actions.ts](../src/template_actions.ts) - `load_template` (overwrite guard +
+  codec-clone), shared by the empty-state panel and the toolbar Examples group
 
 State and types:
 - [src/app_state.ts](../src/app_state.ts), [src/types.ts](../src/types.ts)
@@ -60,6 +65,7 @@ Pure modules (no Solid imports, node-testable):
   [src/measure_text.ts](../src/measure_text.ts)
 - [src/themes.ts](../src/themes.ts) - shape registry; re-exports palettes from `palettes.ts`
 - [src/palettes.ts](../src/palettes.ts) - bubble color `PALETTES` registry and `depth_fill` helper
+- [src/templates.ts](../src/templates.ts) - prefilled example maps (`TEMPLATES`); pure data, no DOM/Solid
 - [src/label_wrap.ts](../src/label_wrap.ts) - shared verb/edge label-size source of truth
   (constants + `wrap_verb_label` + `label_box`; no DOM/Solid); imported by
   `layout_graph.ts` (dagre sizing) and `concept_edge.tsx` (wrapping)
