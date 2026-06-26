@@ -1,4 +1,4 @@
-// Palette registry for the pseudo-code flowchart app.
+// Palette registry for Concept Map Maker.
 //
 // Pure data module -- no Solid, no DOM imports.
 // Provides the PALETTES color-ramp registry and the depth_fill helper.

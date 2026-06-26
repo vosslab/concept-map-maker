@@ -1,43 +1,34 @@
 // autosave.spec.ts - localStorage autosave and reload persistence.
 //
-// Verifies that a submitted flowchart is autosaved to localStorage and survives
-// a full page reload. The autosave is a 500ms-debounced write to the
-// "pseudo-code-flowchart:document" localStorage key. After reload, create_app_state
+// Verifies that triples entered by the user are autosaved to localStorage and
+// survive a full page reload. The autosave is a 500ms-debounced write to the
+// "concept-map-maker:document" localStorage key. After reload, create_app_state
 // reads from that slot and restores the document.
 //
 // Steps:
-//   1. Load an example (password-check); nodes appear in the canvas.
-//   2. Wait for the autosave debounce (> 500ms) to flush.
-//   3. Confirm the autosave slot was written with expected source text.
-//   4. Reload the page.
-//   5. Assert flow nodes are still visible without any user action.
+//   1. Enter two triples.
+//   2. Wait for the autosave debounce (>500ms) to flush.
+//   3. Reload the page.
+//   4. Assert the concept nodes are still visible and the concept count matches.
 
 import { test, expect } from "@playwright/test";
+import { enter_triple } from "./helpers";
 
-// Matches AUTOSAVE_KEY in src/app_state.ts.
-const AUTOSAVE_KEY = "pseudo-code-flowchart:document";
+// Match the AUTOSAVE_KEY from app_state.ts so the test can assert on the slot.
+const AUTOSAVE_KEY = "concept-map-maker:document";
 
-test("flowchart persists across page reload via autosave", async ({ page }) => {
-  // Navigate first (blank page), then clear the autosave slot via evaluate so the
-  // clear runs only ONCE. addInitScript would re-run on page.reload() and wipe the
-  // slot that the autosave just wrote -- that is exactly the race we are testing against.
+test("triples persist across page reload via autosave", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate((key: string) => {
-    window.localStorage.removeItem(key);
-  }, AUTOSAVE_KEY);
 
-  // Reload after clearing so the page boots with no stored document.
-  await page.reload();
-  await page.waitForLoadState("domcontentloaded");
+  // Enter two triples.
+  await page.getByRole("button", { name: "+ Add row" }).click();
+  await page.waitForTimeout(100);
 
-  // Load the password-check example. load_example calls load_source which
-  // submits the source, rendering the chart and triggering autosave.
-  const first_btn = page.locator(".empty-state-template-btn").first();
-  await expect(first_btn).toBeVisible({ timeout: 5000 });
-  await first_btn.click();
+  await enter_triple(page, 1, "Bees", "pollinate", "Flowers");
+  await enter_triple(page, 2, "Flowers", "produce", "Honey");
 
   // Wait for the SVG to render (confirms the state is live).
-  const nodes = page.locator("g.flow-node");
+  const nodes = page.locator("g.concept-node");
   await expect(nodes.first()).toBeVisible({ timeout: 5000 });
 
   // Wait for the autosave debounce to flush by polling the localStorage key.
@@ -47,65 +38,27 @@ test("flowchart persists across page reload via autosave", async ({ page }) => {
     { timeout: 3000 },
   );
 
-  // Verify the autosave slot was written and contains the source text.
-  const saved = await page.evaluate(
-    (key: string) => window.localStorage.getItem(key),
-    AUTOSAVE_KEY,
-  );
+  // Verify the autosave slot was written.
+  const saved = await page.evaluate((key: string) => {
+    return window.localStorage.getItem(key);
+  }, AUTOSAVE_KEY);
   expect(saved).not.toBeNull();
 
-  // The saved JSON must include the document source field.
-  const doc = JSON.parse(saved as string) as { source?: string };
-  expect(typeof doc.source).toBe("string");
-  // The password-check source contains "input password".
-  expect((doc.source ?? "").toLowerCase()).toContain("input");
+  // Confirm the saved JSON contains our concepts.
+  const doc = JSON.parse(saved as string) as { triples: Array<{ from: string; to: string }> };
+  const froms = doc.triples.map((t) => t.from.toLowerCase());
+  expect(froms.some((f) => f.includes("bee"))).toBe(true);
 
   // Reload the page.
   await page.reload();
   await page.waitForLoadState("domcontentloaded");
 
-  // After reload the app reads the autosaved document and re-derives the graph.
-  // Flow nodes should reappear without any user action.
-  const nodes_after = page.locator("g.flow-node");
+  // After reload, the app should restore the autosaved triples.
+  // The SVG nodes should reappear without any user action.
+  const nodes_after = page.locator("g.concept-node");
   await expect(nodes_after.first()).toBeVisible({ timeout: 5000 });
 
-  // At least one node must survive the reload round-trip.
+  // The concept count should be >= 3 (Bees, Flowers, Honey).
   const count_after = await nodes_after.count();
-  expect(count_after).toBeGreaterThanOrEqual(1);
-});
-
-test("autosave slot uses the pseudo-code-flowchart:document key", async ({ page }) => {
-  // Clear the slot first so the test is independent.
-  await page.addInitScript((key: string) => {
-    window.localStorage.removeItem(key);
-  }, AUTOSAVE_KEY);
-
-  await page.goto("/");
-
-  // Load an example to trigger an autosave write.
-  const first_btn = page.locator(".empty-state-template-btn").first();
-  await expect(first_btn).toBeVisible({ timeout: 5000 });
-  await first_btn.click();
-
-  await page.locator("g.flow-node").first().waitFor({ timeout: 5000 });
-
-  // Poll until the key is written.
-  await page.waitForFunction(
-    (key: string) => window.localStorage.getItem(key) !== null,
-    AUTOSAVE_KEY,
-    { timeout: 3000 },
-  );
-
-  // The old concept-map-maker key must NOT have been written.
-  const old_key_value = await page.evaluate(() =>
-    window.localStorage.getItem("concept-map-maker:document"),
-  );
-  expect(old_key_value).toBeNull();
-
-  // The new pseudo-code key must be present.
-  const new_key_value = await page.evaluate(
-    (key: string) => window.localStorage.getItem(key),
-    AUTOSAVE_KEY,
-  );
-  expect(new_key_value).not.toBeNull();
+  expect(count_after).toBeGreaterThanOrEqual(3);
 });

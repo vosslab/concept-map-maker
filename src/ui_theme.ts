@@ -1,4 +1,4 @@
-// UI theme model and helpers for the pseudo-code flowchart appearance switch.
+// UI theme model and helpers for the Concept Map Maker appearance switch.
 //
 // Drives a two-state light / dark UI appearance switch. The chosen theme is
 // persisted in localStorage under UI_THEME_STORAGE_KEY. CSS custom properties
@@ -36,7 +36,7 @@ export type UiTheme = (typeof UI_THEME_VALUES)[number];
 // The localStorage key for the persisted theme choice. Must exactly match the
 // inline early-set script in index.html (which duplicates this string to run
 // before the bundle loads). The Playwright spec's reload assertion guards drift.
-export const UI_THEME_STORAGE_KEY = "pseudo-code-flowchart:ui-theme";
+export const UI_THEME_STORAGE_KEY = "concept-map-maker:ui-theme";
 
 //============================================
 // is_valid_ui_theme

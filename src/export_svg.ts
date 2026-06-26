@@ -1,4 +1,4 @@
-// export_svg.ts - SVG and PNG export for the flowchart canvas.
+// export_svg.ts - SVG and PNG export for the concept map canvas.
 //
 // Browser-only module. All three exported functions operate on a live
 // SVGSVGElement (the ref exposed by MapCanvas via props.svg_ref) and an
@@ -11,7 +11,7 @@
 //   download_png(svg, state, filename, scale?): Promise<void>
 
 import type { AppState } from "./app_state";
-import type { FlowNodeId } from "./types";
+import type { ConceptKey } from "./types";
 import type { NodeBox } from "./edge_geometry";
 import { effective_extent } from "./map_bounds";
 import { set_exporting_light } from "./ui_theme";
@@ -27,15 +27,15 @@ const PNG_MAX_DIM = 8000;
 //============================================
 // build_export_node_boxes
 //============================================
-// Convert the layout nodes map (FlowLayoutNode has x, y, w, h keyed by
-// FlowNode.id) to a NodeBox map that effective_extent can consume. Applies
+// Convert the layout nodes map (LayoutNode has x, y, w, h keyed by
+// ConceptKey) to a NodeBox map that effective_extent can consume. Applies
 // drag overrides: the rendered center is the override when present, else the
 // layout center.
-function build_export_node_boxes(state: AppState): Map<FlowNodeId, NodeBox> {
-  const boxes = new Map<FlowNodeId, NodeBox>();
+function build_export_node_boxes(state: AppState): Map<ConceptKey, NodeBox> {
+  const boxes = new Map<ConceptKey, NodeBox>();
   for (const [key, node] of state.layout().nodes) {
     const position = state.node_position(key);
-    // nodes without a resolved position are skipped (no override, no layout)
+    // concepts without a resolved position are skipped (no override, no layout)
     if (position === null) {
       continue;
     }
@@ -100,7 +100,7 @@ function strip_interactive_attrs(root: Element): void {
 //   7. Serialize with XMLSerializer and prepend the XML declaration + xmlns.
 export async function export_svg_text(svg: SVGSVGElement, state: AppState): Promise<string> {
   // clear hover so the export captures neutral styling
-  state.set_hover({ source: null, nodeId: null });
+  state.set_hover({ source: null, tripleId: null, conceptKey: null });
   // force the map color accessors to resolve LIGHT for the duration of the
   // snapshot so the exported file stays self-contained and authored-light even
   // when the on-screen theme is dark. Reset in the finally below so the live map

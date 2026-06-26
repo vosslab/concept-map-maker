@@ -59,7 +59,7 @@
 }
 
 /* ============================================================
-   Empty-state panel (shown inside map pane when doc has no flow nodes)
+   Empty-state panel (shown inside map pane when doc has no triples)
    ============================================================ */
 
 /* Centered overlay container inside the map pane. Overlaid via absolute

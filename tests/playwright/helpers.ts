@@ -1,58 +1,93 @@
-// helpers.ts - shared Playwright helpers for pseudo-code flowchart editor specs.
+// helpers.ts - shared Playwright helpers for concept-map-maker specs.
 //
-// Provides:
-//   AUTOSAVE_KEY   - matches AUTOSAVE_KEY in src/app_state.ts.
-//   clear_autosave - removes the autosave slot before the page boots.
-//   type_pseudo    - drives the CodeMirror source editor with supplied text.
-//   click_update   - clicks the "Update Flowchart" button in the editor header.
+// Provides a reusable enter_triple function and a paste_tsv helper used across
+// multiple spec files so each spec stays focused on the behavior it verifies.
 //
-// The CodeMirror editor mounts inside .code-editor-host .cm-content. We drive
-// it via keyboard input so CodeMirror's reactive update pipeline fires normally
-// and the onChange -> set_draft_source -> state chain is exercised end to end.
+// Interactions:
+//   - from/to cells: ConceptAutocomplete inputs (blur commits after 150ms).
+//   - verb cells: plain inputs (Enter calls on_enter which adds the next row).
+//   - The app starts empty; callers must add at least the first row before
+//     calling enter_triple for row 1.
 
 import type { Page } from "@playwright/test";
 
-//============================================
-// AUTOSAVE_KEY
-//============================================
-// Matches AUTOSAVE_KEY in src/app_state.ts. Referenced by specs that need to
-// clear localStorage before loading so autosave cannot restore a prior document.
-export const AUTOSAVE_KEY = "pseudo-code-flowchart:document";
+// Settle time after pressing Enter in the verb cell. The enter handler calls
+// requestAnimationFrame for focus; add a small buffer for the frame to resolve.
+const ENTER_SETTLE_MS = 200;
+
+// Settle time for the ConceptAutocomplete blur timer (150ms) plus render frame.
+const BLUR_SETTLE_MS = 250;
 
 //============================================
-// clear_autosave
+// enter_triple
 //============================================
-// Remove the autosave slot before the page boots. Callers pass this via
-// page.addInitScript so the slot is gone before create_app_state reads it.
-export async function clear_autosave(page: Page): Promise<void> {
-  await page.addInitScript((key: string) => {
-    window.localStorage.removeItem(key);
-  }, AUTOSAVE_KEY);
+// Type from, verb, and to into an existing row (row_num is 1-based).
+// Pressing Enter in the verb cell triggers the row enter handler: if the row is
+// last, the handler adds a new blank row, so the caller does NOT need to click
+// "+ Add row" before calling enter_triple for the next row number.
+export async function enter_triple(
+  page: Page,
+  row_num: number,
+  from_text: string,
+  verb_text: string,
+  to_text: string,
+): Promise<void> {
+  const from_input = page.getByLabel(`Row ${row_num} from concept`);
+  const verb_input = page.getByLabel(`Row ${row_num} verb phrase`);
+  const to_input = page.getByLabel(`Row ${row_num} to concept`);
+
+  // From cell: type, Escape to close the dropdown, Tab to advance.
+  await from_input.click();
+  await from_input.pressSequentially(from_text);
+  // Escape closes autocomplete without committing; Tab triggers blur->commit.
+  await page.keyboard.press("Escape");
+  await from_input.press("Tab");
+
+  // Verb cell: plain input (no autocomplete). Enter fires the row enter handler.
+  await verb_input.pressSequentially(verb_text);
+  // Enter on the last row adds a new blank row and moves focus.
+  await verb_input.press("Enter");
+  // Wait for requestAnimationFrame + render to settle.
+  await page.waitForTimeout(ENTER_SETTLE_MS);
+
+  // To cell: type then Escape to close dropdown, Tab to commit via blur.
+  await to_input.click();
+  await to_input.pressSequentially(to_text);
+  await page.keyboard.press("Escape");
+  await to_input.press("Tab");
+  // Wait for the 150ms blur timer in ConceptAutocomplete to fire.
+  await page.waitForTimeout(BLUR_SETTLE_MS);
 }
 
 //============================================
-// type_pseudo
+// paste_tsv
 //============================================
-// Replace all text in the CodeMirror editor with the supplied source string.
-// Clicks the editor to focus it, selects all existing text, then types the
-// replacement via keyboard.type so CodeMirror's input pipeline fires normally.
-export async function type_pseudo(page: Page, source: string): Promise<void> {
-  const editor = page.locator(".code-editor-host .cm-content");
-  // Click ensures the editor has focus before we issue keyboard commands.
-  await editor.click();
-  // ControlOrMeta+a selects the entire editor document regardless of platform.
-  await page.keyboard.press("ControlOrMeta+a");
-  // keyboard.type sends each character through the browser's input event stream;
-  // CodeMirror processes every character so the onChange -> set_draft_source
-  // chain fires exactly as it would for a real user typing in the pane.
-  await page.keyboard.type(source);
-}
+// Dispatch a synthetic paste event carrying TSV text to the triples-rows
+// container. The triples table intercepts multi-cell paste (text with tabs/newlines)
+// and calls bulk_insert_triples. Returns after waiting for the bulk insert to
+// complete (one animation frame).
+export async function paste_tsv(page: Page, tsv_text: string): Promise<void> {
+  // Dispatch the paste event directly via evaluate. The triples-rows onPaste
+  // handler fires on any paste event that bubbles up to it, regardless of focus.
+  // We dispatch on the triples table wrapper so the event reaches the handler.
+  await page.evaluate((text) => {
+    // Try triples-rows first; fall back to triples-table.
+    const target =
+      document.querySelector(".triples-rows") ?? document.querySelector(".triples-table");
+    if (target === null) {
+      throw new Error("triples container not found");
+    }
+    // Build a DataTransfer with the TSV text and dispatch a paste event.
+    const dt = new DataTransfer();
+    dt.setData("text/plain", text);
+    const event = new ClipboardEvent("paste", {
+      clipboardData: dt,
+      bubbles: true,
+      cancelable: true,
+    });
+    target.dispatchEvent(event);
+  }, tsv_text);
 
-//============================================
-// click_update
-//============================================
-// Click the "Update Flowchart" button in the code editor header. Callers
-// are responsible for waiting for any resulting graph render afterward.
-export async function click_update(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Update Flowchart" }).click();
+  // Wait for Solid's reactive updates to settle (reactive store update + layout).
+  await page.waitForTimeout(300);
 }

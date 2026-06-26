@@ -3,7 +3,6 @@
 - TypeScript: docs/TYPESCRIPT_STYLE.md
 - Python: docs/PYTHON_STYLE.md
 - Markdown: docs/MARKDOWN_STYLE.md
-- Pseudo-code grammar: docs/PSEUDO_CODE_FORMAT.md
 - Tests: docs/PYTEST_STYLE.md, docs/E2E_TESTS.md, docs/PLAYWRIGHT_USAGE.md
 - Document every edit in docs/CHANGELOG.md.
 

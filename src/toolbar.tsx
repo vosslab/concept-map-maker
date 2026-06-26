@@ -1,20 +1,17 @@
-// toolbar.tsx - document toolbar: editable title, Save/Open/Clear project JSON
-// buttons, autosave status indicator, SVG/PNG/print export, examples, and the
-// UI theme toggle.
-//
-// Note: this migration removed the concept-era CSV triples group. Plain-text
-// ".pseudo" source Save/Open is owned by the toolbar file-ops work package
-// (task #10); project JSON (FlowDocument) save/open is wired here.
+// toolbar.tsx - document toolbar: editable title, Save/Open/Clear JSON buttons,
+// autosave status indicator, CSV import/export, SVG/PNG/print export,
+// and UI theme toggle.
 
 import { createSignal, For, Show } from "solid-js";
 import type { Accessor, JSX } from "solid-js";
 
 import type { AppState } from "./app_state";
 import { serialize_document, parse_document, empty_document } from "./document_codec";
+import { serialize_triples_csv, parse_triples_csv } from "./csv_codec";
 import { download_svg, download_png } from "./export_svg";
 import { UiThemeToggle } from "./ui_theme_toggle";
-import { EXAMPLES } from "./templates";
-import { load_example } from "./template_actions";
+import { TEMPLATES } from "./templates";
+import { load_template } from "./template_actions";
 
 //============================================
 // Toolbar
@@ -32,14 +29,12 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
   // Inline error message when a file open fails; null means no error shown.
   const [open_error, set_open_error] = createSignal<string | null>(null);
 
-  // Hidden <input type="file"> ref; programmatically clicked on button press.
+  // Hidden <input type="file"> refs; programmatically clicked on button press.
   const [json_input_ref, set_json_input_ref] = createSignal<HTMLInputElement | null>(null);
-
-  // Hidden <input type="file"> ref for .pseudo source file open.
-  const [pseudo_input_ref, set_pseudo_input_ref] = createSignal<HTMLInputElement | null>(null);
+  const [csv_input_ref, set_csv_input_ref] = createSignal<HTMLInputElement | null>(null);
 
   //--------------------------------------------
-  // --- FILE GROUP: Save / Open / Clear project ---
+  // --- FILE GROUP: Save / Open / Clear ---
   //--------------------------------------------
 
   // Save project: serialize -> Blob -> anchor download
@@ -49,7 +44,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     // use the document title as the filename; fall back when blank
-    const safe_title = state.doc.title.trim() || "flowchart";
+    const safe_title = state.doc.title.trim() || "concept-map";
     anchor.href = url;
     anchor.download = `${safe_title}.json`;
     anchor.click();
@@ -100,7 +95,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
 
   // Clear document: confirm then replace with empty
   function handle_clear(): void {
-    const confirmed = window.confirm("Clear the current flowchart? This cannot be undone.");
+    const confirmed = window.confirm("Clear the current concept map? This cannot be undone.");
     if (confirmed) {
       state.replace_document(empty_document());
     }
@@ -112,34 +107,33 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
   }
 
   //--------------------------------------------
-  // --- SOURCE GROUP: Save source / Open source ---
+  // --- CSV GROUP: Export triples CSV / Import triples CSV ---
   //--------------------------------------------
 
-  // Save source: write doc.source as a plain .pseudo text file
-  function handle_save_source(): void {
-    const source = state.doc.source;
-    const blob = new Blob([source], { type: "text/plain" });
+  // Export triples CSV: serialize triples only -> Blob -> anchor download.
+  // CSV is triples-only; it is NOT a full project save.
+  function handle_export_csv(): void {
+    const csv_text = serialize_triples_csv(state.doc.triples);
+    const blob = new Blob([csv_text], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
-    // use the document title as the filename base; fall back when blank
-    const safe_title = state.doc.title.trim() || "flowchart";
+    const safe_title = state.doc.title.trim() || "concept-map";
     anchor.href = url;
-    anchor.download = `${safe_title}.pseudo`;
+    // filename makes clear this is triples only
+    anchor.download = `${safe_title}-triples.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
 
-  // Open source: trigger hidden .pseudo file input
-  function handle_open_source_click(): void {
-    // clear any prior error before the user picks a new file
-    set_open_error(null);
-    const input = pseudo_input_ref();
+  // Import triples CSV: trigger hidden file input
+  function handle_import_csv_click(): void {
+    const input = csv_input_ref();
     if (input !== null) {
       input.click();
     }
   }
 
-  function handle_pseudo_file_change(
+  function handle_csv_file_change(
     event: Event & { currentTarget: HTMLInputElement; target: HTMLInputElement },
   ): void {
     const input = event.currentTarget;
@@ -150,10 +144,17 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
     const reader = new FileReader();
     reader.onload = (): void => {
       const text = reader.result as string;
-      // load and normalize the source on submit, matching the example-load flow
-      set_open_error(null);
-      state.load_source(text);
-      // reset so re-opening the same filename triggers change again
+      let result;
+      try {
+        result = parse_triples_csv(text);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        set_open_error(`CSV import failed: ${msg}`);
+        input.value = "";
+        return;
+      }
+      // APPEND triples (do not wipe document -- CSV is triples-only convenience)
+      state.bulk_insert_triples(result.rows);
       input.value = "";
     };
     reader.readAsText(file);
@@ -169,7 +170,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
     if (svg === null) {
       return;
     }
-    const safe_title = state.doc.title.trim() || "flowchart";
+    const safe_title = state.doc.title.trim() || "concept-map";
     // download_svg returns a Promise; errors surface in the console (no blocking UI needed)
     void download_svg(svg, state, `${safe_title}.svg`);
   }
@@ -180,7 +181,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
     if (svg === null) {
       return;
     }
-    const safe_title = state.doc.title.trim() || "flowchart";
+    const safe_title = state.doc.title.trim() || "concept-map";
     void download_png(svg, state, `${safe_title}.png`);
   }
 
@@ -239,37 +240,37 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
         </span>
       </span>
 
-      {/* --- SOURCE GROUP --- */}
-      <span class="toolbar-group" role="group" aria-labelledby="tg-caption-source">
-        <span class="toolbar-group-caption" id="tg-caption-source">
-          Source
+      {/* --- CSV GROUP --- */}
+      <span class="toolbar-group" role="group" aria-labelledby="tg-caption-csv">
+        <span class="toolbar-group-caption" id="tg-caption-csv">
+          CSV
         </span>
         <span class="toolbar-group-buttons">
           <button
             class="toolbar-btn"
-            aria-label="Save source as .pseudo file"
-            onClick={handle_save_source}
+            aria-label="Export triples as CSV"
+            onClick={handle_export_csv}
           >
-            <i class="fa-solid fa-file-arrow-down" aria-hidden="true" />
-            Save source
+            <i class="fa-solid fa-file-export" aria-hidden="true" />
+            Export triples CSV
           </button>
 
           <button
             class="toolbar-btn"
-            aria-label="Open .pseudo source file"
-            onClick={handle_open_source_click}
+            aria-label="Import triples from CSV"
+            onClick={handle_import_csv_click}
           >
-            <i class="fa-solid fa-file-arrow-up" aria-hidden="true" />
-            Open source
+            <i class="fa-solid fa-file-import" aria-hidden="true" />
+            Import triples CSV
           </button>
 
-          {/* Hidden .pseudo file picker */}
+          {/* Hidden CSV file picker */}
           <input
-            ref={set_pseudo_input_ref}
+            ref={set_csv_input_ref}
             type="file"
-            accept=".pseudo,text/plain"
+            accept=".csv,text/csv"
             style="display:none"
-            onChange={handle_pseudo_file_change}
+            onChange={handle_csv_file_change}
           />
         </span>
       </span>
@@ -282,7 +283,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
         <span class="toolbar-group-buttons">
           <button
             class="toolbar-btn"
-            aria-label="Export flowchart as SVG"
+            aria-label="Export map as SVG"
             disabled={!svg_ready()}
             onClick={handle_export_svg}
           >
@@ -292,7 +293,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
 
           <button
             class="toolbar-btn"
-            aria-label="Export flowchart as PNG"
+            aria-label="Export map as PNG"
             disabled={!svg_ready()}
             onClick={handle_export_png}
           >
@@ -300,7 +301,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
             Export PNG
           </button>
 
-          <button class="toolbar-btn" aria-label="Print flowchart" onClick={handle_print}>
+          <button class="toolbar-btn" aria-label="Print concept map" onClick={handle_print}>
             <i class="fa-solid fa-print" aria-hidden="true" />
             Print
           </button>
@@ -313,15 +314,15 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
           Examples
         </span>
         <span class="toolbar-group-buttons">
-          <For each={EXAMPLES}>
+          <For each={TEMPLATES}>
             {(entry) => (
               <button
                 class="toolbar-btn"
-                aria-label={`Load example: ${entry.title}`}
-                onClick={() => load_example(state, entry)}
+                aria-label={`Load example: ${entry.label}`}
+                onClick={() => load_template(state, entry)}
               >
-                <i class="fa-solid fa-diagram-project" aria-hidden="true" />
-                {entry.title}
+                <i class="fa-solid fa-map" aria-hidden="true" />
+                {entry.label}
               </button>
             )}
           </For>
@@ -336,7 +337,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
         {state.autosave_enabled() ? "autosave on" : "autosave off"}
       </span>
 
-      {/* Inline error for open failures; dismissable, aria-live polite */}
+      {/* Inline error for open/import failures; dismissable, aria-live polite */}
       <Show when={open_error() !== null}>
         <span class="toolbar-open-error" role="alert" aria-live="polite">
           {open_error()}

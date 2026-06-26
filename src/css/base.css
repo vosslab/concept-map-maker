@@ -26,13 +26,13 @@ body {
 }
 
 /* ============================================================
-   App shell grid: toolbar / main area
+   App shell grid: toolbar / main area / rubric panel
    ============================================================ */
 .app-shell {
   display: grid;
   /* Toolbar row auto-grows to fit the ribbon panels (caption + button row)
      instead of clipping them at a fixed 48px; --toolbar-height is the floor. */
-  grid-template-rows: minmax(var(--toolbar-height), auto) 1fr;
+  grid-template-rows: minmax(var(--toolbar-height), auto) 1fr var(--rubric-height);
   grid-template-columns: 1fr;
   height: 100%;
   gap: 0;

@@ -1,0 +1,99 @@
+/* rubric.css - rubric panel strip and rubric checklist status badges */
+
+/* ============================================================
+   Rubric panel (bottom strip)
+   ============================================================ */
+.rubric-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: var(--pad);
+  overflow-y: auto;
+}
+
+/* ============================================================
+   Rubric checklist
+   ============================================================ */
+.rubric-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+/* Base row */
+.rubric-item {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Clickable rows get a pointer cursor and focus ring */
+.rubric-item--clickable {
+  cursor: pointer;
+}
+
+.rubric-item--clickable:hover .rubric-message {
+  text-decoration: underline;
+}
+
+.rubric-item--clickable:focus {
+  outline: 2px solid var(--from-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Status marker chip: bold, fixed-width-ish label */
+.rubric-marker {
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Level-specific colors: pass=green, warn=amber, fail=red, hint=muted */
+.rubric-item--pass .rubric-marker {
+  background: #d4edda;
+  color: #155724;
+}
+
+.rubric-item--warn .rubric-marker {
+  background: #fff3cd;
+  /* darkened from #856404 (4.96:1) to #7c5d04 (5.53:1 on #fff3cd) */
+  color: #7c5d04;
+}
+
+.rubric-item--fail .rubric-marker {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.rubric-item--hint .rubric-marker {
+  background: #e9ecef;
+  /* fixed dark text avoids --color-muted (#a0a0a0 in dark, 2.21:1 on #e9ecef);
+     #5d5d5d yields 5.55:1 on #e9ecef in both light and dark modes */
+  color: #5d5d5d;
+}
+
+/* Hint rows are visually subdued so they do not look like failures */
+.rubric-item--hint {
+  opacity: 0.7;
+}
+
+.rubric-message {
+  color: var(--color-heading);
+}
+
+.rubric-item--hint .rubric-message {
+  color: var(--color-muted);
+  font-style: italic;
+}

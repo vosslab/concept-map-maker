@@ -1,13 +1,12 @@
 # Related projects
 
-Sibling repos, shared libraries, and integration touchpoints for the pseudo-code
-flowchart editor. Adapted from a SolidJS concept-map editor fork.
+Sibling repos, shared libraries, and integration touchpoints for Concept Map Maker.
 
 ## Runtime dependencies
 
 - **solid-js** (>=1.9.13) - reactive UI framework. https://www.solidjs.com/
-- **@dagrejs/dagre** (>=3.0.0) - directed graph auto-layout used for flowchart
-  SVG rendering. https://github.com/dagrejs/dagre
+- **@dagrejs/dagre** (>=3.0.0) - directed graph auto-layout used for the
+  concept map SVG. https://github.com/dagrejs/dagre
 - **Font Awesome Free 6.7.2** - vendored into `vendor/fontawesome/` (no CDN).
   https://fontawesome.com/
 
@@ -22,8 +21,7 @@ flowchart editor. Adapted from a SolidJS concept-map editor fork.
 
 ## Deployment
 
-- **GitHub Pages** - static site host at https://vosslab.github.io/pseudo-code-mapper/
-  (URL valid after the GitHub repo is renamed to pseudo-code-mapper).
+- **GitHub Pages** - static site host at https://vosslab.github.io/concept-map-maker/
   Deploy workflow: `.github/workflows/deploy_pages.yml`.
 
 ## Known gaps

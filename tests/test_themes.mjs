@@ -4,8 +4,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { PALETTES, depth_fill } from "../src/palettes.ts";
-import { ORIGIN_EMPHASIS } from "../src/themes.ts";
+import { PALETTES, depth_fill } from "../src/palettes.js";
+import { ORIGIN_EMPHASIS, SHAPE_REGISTRY } from "../src/themes.js";
 
 //============================================
 // PALETTES
@@ -70,5 +70,41 @@ describe("ORIGIN_EMPHASIS", () => {
 
   it("stroke is a hex color string", () => {
     assert.match(ORIGIN_EMPHASIS.stroke, /^#[0-9a-fA-F]{3,6}$/);
+  });
+});
+
+//============================================
+// SHAPE_REGISTRY
+//============================================
+describe("SHAPE_REGISTRY", () => {
+  it("rounded has modest corner_radius (below capsule threshold) and is not ellipse", () => {
+    assert.ok(SHAPE_REGISTRY.rounded.corner_radius > 0);
+    assert.ok(SHAPE_REGISTRY.rounded.corner_radius < 18);
+    assert.equal(SHAPE_REGISTRY.rounded.is_ellipse, false);
+  });
+
+  it("rect has corner_radius 0 and is not ellipse", () => {
+    assert.equal(SHAPE_REGISTRY.rect.corner_radius, 0);
+    assert.equal(SHAPE_REGISTRY.rect.is_ellipse, false);
+  });
+
+  it("oval is_ellipse is true", () => {
+    assert.equal(SHAPE_REGISTRY.oval.is_ellipse, true);
+  });
+
+  it("capsule is_capsule is true and is not ellipse", () => {
+    assert.equal(SHAPE_REGISTRY.capsule.is_capsule, true);
+    assert.equal(SHAPE_REGISTRY.capsule.is_ellipse, false);
+  });
+
+  it("capsule corner_radius is 0 (rx is computed dynamically from node height)", () => {
+    // capsule rx = height / 2 is computed in the renderer, not stored in the registry
+    assert.equal(SHAPE_REGISTRY.capsule.corner_radius, 0);
+  });
+
+  it("non-capsule shapes have is_capsule false", () => {
+    assert.equal(SHAPE_REGISTRY.rounded.is_capsule, false);
+    assert.equal(SHAPE_REGISTRY.rect.is_capsule, false);
+    assert.equal(SHAPE_REGISTRY.oval.is_capsule, false);
   });
 });

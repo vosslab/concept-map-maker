@@ -1,71 +1,83 @@
-// Shared contract for the pseudo-code flowchart app.
+// Shared contract for the Concept Map Maker app.
 //
 // This module is pure TypeScript with zero imports from Solid or the DOM.
-// Every other package imports its model types and normalizers from
+// Every other package imports its types and the concept_key normalizer from
 // here, so it is the frozen contract for the whole codebase.
 
-export type NodeShape =
-  | "terminal"
-  | "io"
-  | "process"
-  | "decision"
-  | "loop"
-  | "subroutine"
-  | "comment"
-  | "connector";
-
-export type FlowEdgeBranch = "true" | "false";
-
-export type FlowEdgeKind = "flow" | "comment" | "back";
-
-export type FlowNodeId = string;
-
-export interface FlowNode {
-  id: FlowNodeId;
-  shape: NodeShape;
-  text: string;
-  line: number;
-}
-
-export interface FlowEdge {
+// A single directed proposition: from -verb-> to.
+// "from" and "to" hold raw concept labels (display casing); normalization to a
+// ConceptKey happens via concept_key().
+export interface Triple {
   id: string;
-  from: FlowNodeId;
-  to: FlowNodeId;
-  branch?: FlowEdgeBranch;
-  kind: FlowEdgeKind;
+  from: string;
+  verb: string;
+  to: string;
 }
 
-export interface FlowGraph {
-  nodes: FlowNode[];
-  edges: FlowEdge[];
-}
+// A normalized concept identity. Produced by concept_key(): trimmed, internal
+// whitespace collapsed to single spaces, lowercased. Two labels that differ
+// only in casing or whitespace share one ConceptKey (and therefore one bubble).
+export type ConceptKey = string;
 
-// Color palette applied document-wide. Node shapes are part of FlowNode, not
-// the theme.
+// Bubble shape applied map-wide.
+export type ThemeShape = "rounded" | "rect" | "oval" | "capsule";
+
+// Color palette applied map-wide.
 export type ThemePalette = "earth" | "fire";
 
-export interface FlowTheme {
+export interface Theme {
+  shape: ThemeShape;
   palette: ThemePalette;
 }
 
-// A drag-adjusted node position, keyed by FlowNode.id in FlowDocument.overrides.
+// A drag-adjusted bubble position, keyed by ConceptKey in CmapDocument.overrides.
 export interface Position {
   x: number;
   y: number;
 }
 
-export interface FlowDocument {
-  format: "pseudo-code-flowchart";
+// The full project document. This is the autosave unit and the JSON save format.
+export interface CmapDocument {
+  format: "concept-map-maker";
   version: 1;
   title: string;
-  source: string;
-  overrides: Record<FlowNodeId, Position>;
-  theme: FlowTheme;
+  triples: Triple[];
+  overrides: Record<ConceptKey, Position>;
+  theme: Theme;
 }
 
-// Hover/focus state for flowchart nodes so cross-highlighting stays in sync. A
-// null source means nothing is hovered. nodeId carries the hovered FlowNode.id.
+// Hover/focus state shared between table rows, map nodes, and map edges so
+// cross-highlighting stays in sync. A null source means nothing is hovered.
 export interface HoverState {
-  source: "node" | null;
-  nodeId: FlowNodeId | null;
+  source: "row" | "node" | "edge" | null;
+  tripleId: string | null;
+  conceptKey: ConceptKey | null;
+}
+
+// One result from a validation rule. Severity is split three ways: pass/warn/fail
+// for rubric rules.
+export interface ValidationItem {
+  rule: string;
+  level: "pass" | "warn" | "fail";
+  message: string;
+  tripleIds?: string[];
+  conceptKeys?: ConceptKey[];
+}
+
+//============================================
+// concept_key
+//============================================
+// Normalize a concept label into its canonical identity key.
+//
+// Steps: trim leading/trailing whitespace, collapse every run of internal
+// whitespace (spaces, tabs, newlines) to a single space, then lowercase. The
+// display casing is preserved elsewhere (first-casing-wins in derive_concepts);
+// this function only produces the identity used for deduplication and override
+// keying.
+export function concept_key(label: string): ConceptKey {
+  // trim ends, then collapse internal whitespace runs to one space
+  const collapsed = label.trim().replace(/\s+/g, " ");
+  // lowercase for case-insensitive identity
+  const key = collapsed.toLowerCase();
+  return key;
 }

@@ -1,11 +1,11 @@
 // Pure map-bounds helper: the single source of truth for the rendered extent of
-// the flowchart. It is consumed by the SVG viewBox, PNG raster sizing, and print
+// a concept map. It is consumed by the SVG viewBox, PNG raster sizing, and print
 // sizing. Plain TypeScript with zero imports from Solid or the DOM.
 
-import type { FlowNodeId, Position } from "./types.ts";
+import type { ConceptKey, Position } from "./types.ts";
 import type { NodeBox } from "./edge_geometry.ts";
 
-// The bounding rectangle that should contain every rendered node plus padding.
+// The bounding rectangle that should contain every rendered bubble plus padding.
 // min_x / min_y are the top-left corner; width / height are the full size.
 export interface MapExtent {
   min_x: number;
@@ -26,8 +26,8 @@ export interface MapExtent {
 // An empty node map yields a zero-origin, zero-size extent (only the padding on
 // each side), which keeps downstream viewBox math finite.
 export function effective_extent(
-  nodes: Map<FlowNodeId, NodeBox>,
-  overrides: Record<FlowNodeId, Position>,
+  nodes: Map<ConceptKey, NodeBox>,
+  overrides: Record<ConceptKey, Position>,
   padding: number,
 ): MapExtent {
   // running min/max of every node's outer edges in rendered position

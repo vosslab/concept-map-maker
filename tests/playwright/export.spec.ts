@@ -1,41 +1,38 @@
 /// <reference types="node" />
-// export.spec.ts - SVG and PNG export coverage for the pseudo-code flowchart editor.
+// export.spec.ts - export button behavior for SVG and PNG.
 //
 // Verifies:
-//   1. "Export SVG" triggers a download with valid SVG XML.
-//   2. The exported SVG contains non-rectangular SVG geometry (<ellipse> for
-//      terminal nodes), confirming the 8-shape renderer survives serialization.
-//   3. The exported SVG contains True/False branch-label text, confirming
-//      decision-node edges survive SVG export.
-//   4. "Export PNG" triggers a download with non-empty PNG binary data.
+//   1. Clicking "Export SVG" (aria-label "Export map as SVG") triggers a download
+//      and the downloaded content parses as valid XML containing an <svg> element.
+//   2. Clicking "Export PNG" (aria-label "Export map as PNG") triggers a download
+//      and the downloaded content is non-empty binary data (a valid PNG blob size).
 //
-// Tests 2 and 3 guard against regressions where all nodes collapse to <rect>
-// elements or branch labels are stripped during SVG serialization.
+// The test uses Playwright's download event to capture the file content. It does
+// NOT verify visual correctness of the exported image; it verifies that the export
+// pipeline runs without error and produces the correct file format.
 
 import { test, expect } from "@playwright/test";
-import { clear_autosave, type_pseudo, click_update } from "./helpers";
+import { enter_triple } from "./helpers";
 
-// Shared helper: load the password-check example (has terminal + io + decision
-// shapes and True/False branch labels) and wait for nodes to appear.
-async function load_password_check(page: import("@playwright/test").Page): Promise<void> {
-  await clear_autosave(page);
+test("Export SVG button downloads well-formed SVG", async ({ page }) => {
   await page.goto("/");
-  const first_btn = page.locator(".empty-state-template-btn").first();
-  await expect(first_btn).toBeVisible({ timeout: 5000 });
-  await first_btn.click();
-  const nodes = page.locator("g.flow-node");
-  await expect(nodes.first()).toBeVisible({ timeout: 5000 });
-  // Wait for the export button to become enabled (svg_el is set after mount).
-  await expect(page.getByRole("button", { name: "Export flowchart as SVG" })).toBeEnabled({
-    timeout: 5000,
-  });
-}
 
-// Shared helper: download SVG and return its text content.
-async function download_svg_content(page: import("@playwright/test").Page): Promise<string> {
+  // Enter one triple to populate the map so the SVG has content.
+  await page.getByRole("button", { name: "+ Add row" }).click();
+  await page.waitForTimeout(100);
+  await enter_triple(page, 1, "Water", "cycles through", "Clouds");
+
+  // Wait for a bubble to render, which means the SVG ref is ready and the
+  // export buttons are enabled.
+  const nodes = page.locator("g.concept-node");
+  await expect(nodes.first()).toBeVisible({ timeout: 5000 });
+
+  // Click the SVG export button and wait for the download event.
   const download_promise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export flowchart as SVG" }).click();
+  await page.getByRole("button", { name: "Export map as SVG" }).click();
   const download = await download_promise;
+
+  // Read the downloaded content as text.
   const stream = await download.createReadStream();
   const chunks: Buffer[] = [];
   await new Promise<void>((resolve, reject) => {
@@ -43,66 +40,34 @@ async function download_svg_content(page: import("@playwright/test").Page): Prom
     stream.on("end", resolve);
     stream.on("error", reject);
   });
-  return Buffer.concat(chunks).toString("utf8");
-}
+  const content = Buffer.concat(chunks).toString("utf8");
 
-test("Export SVG button downloads well-formed SVG", async ({ page }) => {
-  await load_password_check(page);
-  const content = await download_svg_content(page);
-
-  // Must be non-empty and parse as valid SVG/XML.
+  // The content must be non-empty and parse as valid XML containing <svg.
   expect(content.length).toBeGreaterThan(50);
   expect(content).toContain("<svg");
+  // Verify it is well-formed enough for DOMParser. We check for the closing tag.
   expect(content).toContain("</svg>");
+  // The format tag should be xml or svg namespace.
   expect(content.toLowerCase()).toContain("xmlns");
 });
 
-test("exported SVG contains non-rectangular geometry (ellipse for terminal nodes)", async ({
-  page,
-}) => {
-  await load_password_check(page);
-  const content = await download_svg_content(page);
-
-  // Terminal (Start/End) nodes render as <ellipse> elements. A renderer that
-  // falls back to all-rect would omit this element entirely.
-  expect(content).toContain("<ellipse");
-});
-
-test("exported SVG contains True/False branch labels", async ({ page }) => {
-  await load_password_check(page);
-  const content = await download_svg_content(page);
-
-  // The password-check if/else decision emits True and False edge labels.
-  // These must survive the SVG serialization and appear in the exported file.
-  expect(content).toContain("True");
-  expect(content).toContain("False");
-});
-
-test("exported SVG preserves dashed comment edges (stroke-dasharray present)", async ({ page }) => {
-  // Load a source that contains a full-line comment so a comment node and its
-  // dashed edge are rendered, then verify the SVG export includes stroke-dasharray.
-  await clear_autosave(page);
-  await page.goto("/");
-  // Type source with a full-line comment using the CodeMirror editor helper.
-  await type_pseudo(page, "start\n# note\noutput result\nend\n");
-  await click_update(page);
-  const nodes = page.locator("g.flow-node");
-  await expect(nodes.first()).toBeVisible({ timeout: 5000 });
-  await expect(page.getByRole("button", { name: "Export flowchart as SVG" })).toBeEnabled({
-    timeout: 5000,
-  });
-  const content = await download_svg_content(page);
-  // Comment edges render dashed; stroke-dasharray must survive SVG export.
-  expect(content).toContain("stroke-dasharray");
-});
-
 test("Export PNG button downloads non-empty PNG", async ({ page }) => {
-  await load_password_check(page);
+  await page.goto("/");
 
+  // Enter one triple to populate the map.
+  await page.getByRole("button", { name: "+ Add row" }).click();
+  await page.waitForTimeout(100);
+  await enter_triple(page, 1, "Light", "energizes", "Plants");
+
+  const nodes = page.locator("g.concept-node");
+  await expect(nodes.first()).toBeVisible({ timeout: 5000 });
+
+  // Click the PNG export button and wait for the download event.
   const download_promise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export flowchart as PNG" }).click();
+  await page.getByRole("button", { name: "Export map as PNG" }).click();
   const download = await download_promise;
 
+  // Collect the binary stream and verify it has a plausible size.
   const stream = await download.createReadStream();
   const chunks: Buffer[] = [];
   await new Promise<void>((resolve, reject) => {
@@ -112,10 +77,11 @@ test("Export PNG button downloads non-empty PNG", async ({ page }) => {
   });
   const buffer = Buffer.concat(chunks);
 
-  // A minimal real PNG is orders of magnitude larger than this lower bound.
+  // A minimal PNG with one 2x2 pixel would be ~67 bytes; any real export is
+  // orders of magnitude larger. We assert it is at least 100 bytes.
   expect(buffer.length).toBeGreaterThan(100);
 
-  // Verify PNG magic bytes at the start of the file.
+  // The PNG magic bytes are \x89PNG at offset 0.
   expect(buffer[0]).toBe(0x89);
   expect(buffer[1]).toBe(0x50); // 'P'
   expect(buffer[2]).toBe(0x4e); // 'N'

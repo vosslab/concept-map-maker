@@ -1,72 +1,44 @@
-// smoke.spec.ts - basic page-load and structural sanity for the pseudo-code
-// flowchart editor.
+// smoke.spec.ts - basic interactive path for Concept Map Maker.
 //
-// Verifies that the page loads with the expected layout:
-//   - The editor pane (left) with the "Update Flowchart" button is visible.
-//   - The empty-state panel is shown when no pseudo-code has been submitted.
-//   - Submitting valid pseudo-code hides the panel and renders flow nodes.
-//   - Dragging the first rendered node moves it in the SVG canvas.
+// Protects the core loop: load the app, enter three triples in the table, see
+// the resulting bubbles in the map, and drag one bubble. This guards the
+// table -> derivation -> layout -> render -> drag chain end to end.
 //
 // Run:
 //   bash build_github_pages.sh
-//   npx playwright test tests/playwright/smoke.spec.ts
+//   npx playwright test
 
 import { test, expect } from "@playwright/test";
-import { clear_autosave, type_pseudo, click_update } from "./helpers";
+import { enter_triple } from "./helpers";
 
-// Minimal valid pseudo-code: start + one process step + end.
-const SIMPLE_SOURCE = "start\noutput hello\nend";
+// Three concepts forming a simple chain: Sun -> Energy -> Plants -> Animals.
+const TRIPLES = [
+  { from: "Sun", verb: "gives", to: "Energy" },
+  { from: "Energy", verb: "powers", to: "Plants" },
+  { from: "Plants", verb: "feed", to: "Animals" },
+];
 
-test("editor pane and Update Flowchart button are visible on load", async ({ page }) => {
-  await clear_autosave(page);
+test("enter three triples, see bubbles, drag one", async ({ page }) => {
   await page.goto("/");
 
-  // The left editor pane section should be present.
-  await expect(page.locator(".editor-pane")).toBeVisible({ timeout: 5000 });
+  // The app starts with no rows. Add the first row before entering data.
+  // After that, pressing Enter in the verb cell adds subsequent rows via the
+  // row-enter handler in TriplesTable (see enter_triple in helpers.ts).
+  await page.getByRole("button", { name: "+ Add row" }).click();
+  await page.waitForTimeout(100);
 
-  // The submit button drives the source -> graph pipeline.
-  await expect(page.getByRole("button", { name: "Update Flowchart" })).toBeVisible({
-    timeout: 5000,
-  });
-});
+  for (const [index, row] of TRIPLES.entries()) {
+    await enter_triple(page, index + 1, row.from, row.verb, row.to);
+  }
 
-test("empty-state panel visible before submit; nodes appear after submit", async ({ page }) => {
-  await clear_autosave(page);
-  await page.goto("/");
+  // The chain Sun->Energy->Plants->Animals yields four unique concepts, but the
+  // minimum interactive expectation is "at least three bubbles render".
+  const nodes = page.locator("g.concept-node");
+  await expect(nodes.first()).toBeVisible();
+  expect(await nodes.count()).toBeGreaterThanOrEqual(3);
 
-  // Before any source is submitted the panel teaches the pseudo-code model.
-  const panel = page.locator(".empty-state-panel");
-  await expect(panel).toBeVisible({ timeout: 5000 });
-
-  // No flow nodes should exist before submission.
-  const nodes = page.locator("g.flow-node");
-  expect(await nodes.count()).toBe(0);
-
-  // Type valid source and submit.
-  await type_pseudo(page, SIMPLE_SOURCE);
-  await click_update(page);
-
-  // The panel disappears once the graph has nodes.
-  await expect(panel).not.toBeVisible({ timeout: 5000 });
-
-  // At least one flow node should appear in the SVG canvas.
-  await expect(nodes.first()).toBeVisible({ timeout: 5000 });
-  expect(await nodes.count()).toBeGreaterThanOrEqual(1);
-});
-
-test("rendered node can be dragged to a new position", async ({ page }) => {
-  await clear_autosave(page);
-  await page.goto("/");
-
-  // Use the first example button to populate the chart quickly.
-  const first_btn = page.locator(".empty-state-template-btn").first();
-  await expect(first_btn).toBeVisible({ timeout: 5000 });
-  await first_btn.click();
-
-  const nodes = page.locator("g.flow-node");
-  await expect(nodes.first()).toBeVisible({ timeout: 5000 });
-
-  // Read the first node's bounding box before the drag.
+  // Drag the first bubble and confirm its rendered position changes. We read the
+  // bubble's bounding box before and after a pointer drag.
   const first_node = nodes.first();
   const before = await first_node.boundingBox();
   expect(before).not.toBeNull();
@@ -74,7 +46,6 @@ test("rendered node can be dragged to a new position", async ({ page }) => {
   if (before !== null) {
     const start_x = before.x + before.width / 2;
     const start_y = before.y + before.height / 2;
-    // Drag by a large enough amount to be unambiguous.
     await page.mouse.move(start_x, start_y);
     await page.mouse.down();
     await page.mouse.move(start_x + 120, start_y + 80, { steps: 8 });
@@ -83,7 +54,7 @@ test("rendered node can be dragged to a new position", async ({ page }) => {
     const after = await first_node.boundingBox();
     expect(after).not.toBeNull();
     if (after !== null) {
-      // The node must have moved a meaningful distance in at least one axis.
+      // The bubble moved meaningfully in at least one axis.
       const moved = Math.abs(after.x - before.x) + Math.abs(after.y - before.y);
       expect(moved).toBeGreaterThan(5);
     }

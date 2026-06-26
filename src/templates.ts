@@ -1,94 +1,106 @@
-// Example data module for the Pseudo-code Flowchart Editor.
+// Template data module for the Concept Map Maker.
 //
-// Exports EXAMPLES: the pseudo-code example library for the flowchart editor.
-// Each source is canonical pseudo-code per docs/PSEUDO_CODE_FORMAT.md, so
-// loading + Format is a no-op (normalize(source) === source).
-//
-// Source strings use colon headers, one-tab indented bodies, and end-keyword
-// block closers (end if / end while / end for).
+// Provides pre-filled example concept maps so a first-time user can load a
+// real map in one click. Pure data -- no Solid or DOM imports.
 
-//============================================
-// ExampleEntry (pseudo-code examples)
-//============================================
+import type { CmapDocument } from "./types";
 
-// One entry in the pseudo-code example library.
-export interface ExampleEntry {
+// One entry in the template gallery shown on the empty-state panel.
+export interface TemplateEntry {
   id: string;
-  title: string;
-  source: string;
+  label: string;
+  description: string;
+  doc: CmapDocument;
 }
 
 //============================================
-// Pseudo-code example sources
+// Template definitions
 //============================================
 
-// Password check: if/else decision with a simple authentication flow.
-const password_check_source =
-  "start\n" +
-  "input password\n" +
-  "if password == stored_password:\n" +
-  '\toutput "Access granted"\n' +
-  "else:\n" +
-  '\toutput "Access denied"\n' +
-  "end if\n" +
-  "end";
+// Honeybees template: organism, behavior, and environment relationships.
+const honeybee_doc: CmapDocument = {
+  format: "concept-map-maker",
+  version: 1,
+  title: "Honeybees",
+  triples: [
+    { id: "t1", from: "Honeybee", verb: "lives in", to: "Hive" },
+    { id: "t2", from: "Honeybee", verb: "collects", to: "Nectar" },
+    { id: "t3", from: "Nectar", verb: "is converted to", to: "Honey" },
+    { id: "t4", from: "Honeybee", verb: "performs", to: "Waggle dance" },
+    { id: "t5", from: "Waggle dance", verb: "communicates", to: "Food location" },
+    { id: "t6", from: "Honeybee", verb: "pollinates", to: "Flower" },
+    { id: "t7", from: "Flower", verb: "produces", to: "Nectar" },
+    { id: "t8", from: "Hive", verb: "is managed by", to: "Queen bee" },
+  ],
+  overrides: {},
+  theme: { shape: "rounded", palette: "earth" },
+};
 
-// For loop sum: counted loop with a subroutine call and an accumulator.
-const for_loop_sum_source =
-  "start\n" +
-  "set total to 0\n" +
-  "for i from 1 to 3:\n" +
-  "\tcall add_item\n" +
-  "\tset total to total + i\n" +
-  "end for\n" +
-  "output total\n" +
-  "end";
+// Water cycle template: evaporation, condensation, and precipitation relationships.
+const water_cycle_doc: CmapDocument = {
+  format: "concept-map-maker",
+  version: 1,
+  title: "Water cycle",
+  triples: [
+    { id: "t1", from: "Sun", verb: "heats", to: "Water" },
+    { id: "t2", from: "Water", verb: "undergoes", to: "Evaporation" },
+    { id: "t3", from: "Evaporation", verb: "produces", to: "Water vapor" },
+    { id: "t4", from: "Water vapor", verb: "rises into", to: "Atmosphere" },
+    { id: "t5", from: "Atmosphere", verb: "cools to cause", to: "Condensation" },
+    { id: "t6", from: "Condensation", verb: "forms", to: "Cloud" },
+    { id: "t7", from: "Cloud", verb: "releases", to: "Precipitation" },
+    { id: "t8", from: "Precipitation", verb: "returns water to", to: "Ocean" },
+    { id: "t9", from: "Ocean", verb: "is source of", to: "Water" },
+  ],
+  overrides: {},
+  theme: { shape: "rounded", palette: "earth" },
+};
 
-// While loop: count up until a limit then output the result.
-const while_loop_source =
-  "start\n" +
-  "set count to 0\n" +
-  "while count < 3:\n" +
-  "\tset count to count + 1\n" +
-  "end while\n" +
-  "output count\n" +
-  "end";
-
-// If / else: branch on a numeric input and output the chosen value.
-const if_else_source =
-  "start\n" +
-  "input x\n" +
-  "if x > 0:\n" +
-  "\toutput x\n" +
-  "else:\n" +
-  "\toutput 0\n" +
-  "end if\n" +
-  "end";
+// Photosynthesis template: inputs, process, and outputs of photosynthesis.
+const photosynthesis_doc: CmapDocument = {
+  format: "concept-map-maker",
+  version: 1,
+  title: "Photosynthesis",
+  triples: [
+    { id: "t1", from: "Plant", verb: "absorbs", to: "Sunlight" },
+    { id: "t2", from: "Plant", verb: "takes in", to: "Carbon dioxide" },
+    { id: "t3", from: "Plant", verb: "takes in", to: "Water" },
+    { id: "t4", from: "Sunlight", verb: "powers", to: "Photosynthesis" },
+    { id: "t5", from: "Carbon dioxide", verb: "is used in", to: "Photosynthesis" },
+    { id: "t6", from: "Water", verb: "is used in", to: "Photosynthesis" },
+    { id: "t7", from: "Photosynthesis", verb: "produces", to: "Glucose" },
+    { id: "t8", from: "Photosynthesis", verb: "releases", to: "Oxygen" },
+    { id: "t9", from: "Glucose", verb: "provides", to: "Energy" },
+  ],
+  overrides: {},
+  theme: { shape: "rounded", palette: "earth" },
+};
 
 //============================================
-// Exported example list (EXAMPLES)
+// Exported template list
 //============================================
 
-// All pseudo-code examples in display order. Ids are stable kebab-case.
-export const EXAMPLES: readonly ExampleEntry[] = [
+// All available templates in display order.
+export const TEMPLATES: TemplateEntry[] = [
   {
-    id: "password-check",
-    title: "Password check",
-    source: password_check_source,
+    id: "honeybees",
+    label: "Honeybees",
+    description:
+      "Honeybees -- a simple biology example linking organism, behavior, and environment",
+    doc: honeybee_doc,
   },
   {
-    id: "for-loop-sum",
-    title: "For loop sum",
-    source: for_loop_sum_source,
+    id: "water-cycle",
+    label: "Water cycle",
+    description:
+      "Water cycle -- an earth science example showing evaporation, condensation, and precipitation",
+    doc: water_cycle_doc,
   },
   {
-    id: "while-loop",
-    title: "While loop",
-    source: while_loop_source,
-  },
-  {
-    id: "if-else",
-    title: "If / else",
-    source: if_else_source,
+    id: "photosynthesis",
+    label: "Photosynthesis",
+    description:
+      "Photosynthesis -- a cell biology example connecting sunlight, gas exchange, and glucose production",
+    doc: photosynthesis_doc,
   },
 ];

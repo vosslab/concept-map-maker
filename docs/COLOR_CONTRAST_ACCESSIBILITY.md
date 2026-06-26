@@ -68,15 +68,31 @@ indicators. The light value `#b43628` passes at 6.00:1 on `#ffffff` and 5.51:1 o
 (~2.2:1 on `#252525`) is intentionally below 5.5:1 and is not relied on for
 information-critical text.
 
-## Flowchart node palettes
+## Rubric status chips
+
+Status chips in the rubric panel use fixed opaque background/foreground pairs that
+do not depend on UI theme variables, ensuring legibility in both light and dark mode.
+
+| Status | Background | Text color | Ratio |
+| --- | --- | --- | --- |
+| pass | `#d4edda` | `#155724` | >7:1 |
+| warn | `#fff3cd` | `#7c5d04` | 5.53:1 |
+| fail | `#f8d7da` | `#721c24` | >7:1 |
+| hint | `#e9ecef` | `#5d5d5d` | 5.55:1 |
+
+The warn chip text was darkened from `#856404` (4.96:1) to `#7c5d04` (5.53:1) to
+meet the 5.5:1 target. The hint chip uses a fixed dark text color rather than
+`--color-muted` because the dark-mode muted value (`#a0a0a0`) yields only 2.21:1
+on the `#e9ecef` chip background.
+
+## Concept-map palettes
 
 Palette ramps are defined in `src/palettes.ts`. Two palettes ship: `earth` and
 `fire`. Each has six fill stops, depth 0 (lightest) through depth 5 (darkest).
-Adapted from a concept-map editor fork.
 
-The node label color is chosen at runtime in `src/flow_node.tsx` by the
+The node label color is chosen at runtime in `src/concept_node.tsx` by the
 `label_color_for_fill` function, which picks whichever of near-black (`#1a1a1a`)
-or near-white (`#f0f0f0`) yields the higher WCAG contrast ratio against the node
+or near-white (`#f0f0f0`) yields the higher WCAG contrast ratio against the bubble
 fill. The selection uses the full WCAG relative-luminance formula (IEC 61966-2-1).
 
 ### Earth palette
@@ -107,26 +123,21 @@ white. Neither candidate clears 5.5:1 because the fills sit near the luminance
 crossover. Resolving this requires adjusting the palette fill values themselves;
 the label picker cannot compensate for an inherently mid-luminance fill.
 
-## Edge and branch-label colors
+## Edge and verb-label colors
 
-Edge and branch-label inline attribute constants are defined in `src/flow_edge.tsx`.
+Edge and verb-label inline attribute constants are defined in `src/concept_edge.tsx`.
 
 | Element | Light value | Dark value | Background | Ratio |
 | --- | --- | --- | --- | --- |
 | Edge stroke | `#6a6a6a` | `#9a9a9a` | `#ffffff` / `#1e1e1e` | ~4.5:1 / ~4.0:1 |
 | Highlight accent | `#1565c0` | `#5aabff` | `#ffffff` / `#1e1e1e` | ~7:1 / ~5.5:1 |
-| Branch label True | `#176117` (green) | `#4caf50` (green) | `#ffffff` halo / `#1e1e1e` halo | 7.6:1 / 6.0:1 |
-| Branch label False | `#b43628` (red) | `#ff6c60` (red) | `#ffffff` halo / `#1e1e1e` halo | 6.0:1 / 6.0:1 |
-| Comment edge stroke | dashed, same stroke palette | same | same | same |
+| Verb label | `#2a2a2a` | `#e0e0e0` | white halo / dark halo | >12:1 |
 
 Edge strokes are geometric lines rather than text; strict 5.5:1 text contrast does
-not apply, but values were chosen to be clearly visible. Branch labels use color
-to reinforce meaning: green for the True path, red for the False path. The text
-string ("True" / "False") conveys the state independently, so color is
-reinforcement, not the sole cue. Labels are rendered with a halo
-(light mode: `#ffffff`, dark mode: `#1e1e1e`) painted behind the glyphs via
-`paint-order: stroke`, ensuring legibility wherever the label crosses an edge.
-Comment edges use a dashed stroke in the same color ramp; they carry no text label.
+not apply, but values were chosen to be clearly visible. Verb labels are rendered
+with a halo (light mode: `#ffffff`, dark mode: `#1e1e1e`) painted behind the glyphs
+via `paint-order: stroke`, ensuring the label reads against whatever geometry it
+crosses.
 
 ## Rules
 

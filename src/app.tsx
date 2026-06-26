@@ -1,16 +1,16 @@
-// app.tsx - top-level app shell: toolbar strip, pseudo-code editor pane (left),
-// and flowchart map pane (right).
+// app.tsx - top-level app shell: toolbar strip, editor pane (Triples tab),
+// map pane, and rubric panel.
 
-import { createSignal, createMemo, onMount, onCleanup, Show } from "solid-js";
+import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import type { JSX } from "solid-js";
 
 import { create_app_state, browser_storage } from "./app_state";
 import type { AppState, StorageLike } from "./app_state";
-import type { FlowNode as FlowNodeModel, FlowNodeId } from "./types";
-import { CodeEditor } from "./code_editor";
+import { TriplesTable } from "./triples_table";
 import { MapCanvas } from "./map_canvas";
-import { FlowNode } from "./flow_node";
+import { ConceptNode } from "./concept_node";
 import { ThemePicker } from "./theme_picker";
+import { RubricPanel } from "./rubric_panel";
 import { Toolbar } from "./toolbar";
 import { setup_map_theme, set_exporting_light } from "./ui_theme";
 import { EmptyState } from "./empty_state";
@@ -20,7 +20,7 @@ import { EmptyState } from "./empty_state";
 // ============================================
 
 // localStorage key for persisting the editor/map split ratio.
-const RESIZER_STORAGE_KEY = "pseudo-code-flowchart:editor-ratio";
+const RESIZER_STORAGE_KEY = "concept-map-maker:editor-ratio";
 
 // Default ratio (percent) when nothing is stored or value is invalid.
 const RATIO_DEFAULT = 40;
@@ -91,17 +91,6 @@ export function App(): JSX.Element {
   // colors for dark mode. No matchMedia live listener -- the theme is two-state
   // only and only changes when the user clicks the toggle.
   setup_map_theme();
-
-  // node_by_id: a lookup from FlowNode.id to the node, rebuilt only when the graph
-  // changes. The canvas node slot uses it to pass each node's shape and label to
-  // the flow node renderer (the slot only receives the id and its render box).
-  const node_by_id = createMemo<Map<FlowNodeId, FlowNodeModel>>(() => {
-    const map = new Map<FlowNodeId, FlowNodeModel>();
-    for (const node of state.graph().nodes) {
-      map.set(node.id, node);
-    }
-    return map;
-  });
 
   // svg_el: capture the live <svg> element from MapCanvas so Toolbar can pass
   // it to export_svg functions. Null until MapCanvas mounts.
@@ -264,16 +253,12 @@ export function App(): JSX.Element {
 
       {/* Main content area: editor pane (left) + map pane (right) */}
       <main class="main-area" role="main" ref={set_main_el}>
-        {/* Left: pseudo-code source editor. Typing updates the draft only; the
-            graph updates when the user clicks Update Flowchart (or Mod-Enter). */}
-        <section class="editor-pane" aria-label="Pseudo-code editor">
-          <CodeEditor
-            value={state.draft_source()}
-            onChange={state.set_draft_source}
-            onSubmit={state.update_flowchart}
-            onFormat={state.format_source}
-            error={state.parse_error()}
-          />
+        {/* Left: editor pane with tab switcher */}
+        <section class="editor-pane" aria-label="Editor pane">
+          <div>
+            <h2 class="pane-heading">Triples</h2>
+            <TriplesTable state={state} />
+          </div>
         </section>
 
         {/* Draggable divider between editor pane and map pane */}
@@ -297,39 +282,32 @@ export function App(): JSX.Element {
           onDblClick={on_double_click}
         />
 
-        {/* Right: flowchart canvas */}
-        <section class="map-pane" aria-label="Flowchart">
+        {/* Right: concept map canvas */}
+        <section class="map-pane" aria-label="Concept map">
           <div class="map-pane-header">
-            <h2 class="pane-heading">Flowchart</h2>
-            {/* Theme picker in the map pane corner; restyles every node. */}
+            <h2 class="pane-heading">Concept Map</h2>
+            {/* Theme picker in the map pane corner; restyles every bubble. */}
             <ThemePicker state={state} />
           </div>
-          {/* Inject the themed, draggable flow node into the canvas node slot.
-              The slot receives only the id and box; shape and label come from the
-              graph node looked up here. */}
+          {/* Inject the themed, draggable ConceptNode into the canvas node slot. */}
           <MapCanvas
             state={state}
-            node_slot={(id, box) => {
-              const node = node_by_id().get(id);
-              return (
-                <FlowNode
-                  node_id={id}
-                  box={box}
-                  state={state}
-                  shape={node === undefined ? "process" : node.shape}
-                  label={node === undefined ? "" : node.text}
-                />
-              );
-            }}
+            node_slot={(key, box) => <ConceptNode conceptKey={key} box={box} state={state} />}
             svg_ref={(el) => set_svg_el(el)}
           />
-          {/* Empty-state panel: shown only when the rendered graph has no nodes.
-              Hides automatically once the first valid source is submitted. */}
-          <Show when={state.graph().nodes.length === 0}>
+          {/* Empty-state panel: shown only when the document has no triples.
+              Hides automatically once the first triple is added. */}
+          <Show when={state.doc.triples.length === 0}>
             <EmptyState state={state} />
           </Show>
         </section>
       </main>
+
+      {/* Bottom: rubric panel */}
+      <aside class="rubric-panel" aria-label="Rubric">
+        <h2 class="pane-heading">Rubric</h2>
+        <RubricPanel state={state} />
+      </aside>
     </div>
   );
 }
