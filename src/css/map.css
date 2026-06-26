@@ -143,6 +143,21 @@
   outline-offset: 1px;
 }
 
+/* Dark-mode template button: --from-tint is a fixed light blue (no dark override,
+   shared by table columns and map highlights), but the label/desc use theme-aware
+   text tokens that turn light in dark mode. Without this override a light label
+   lands on a light-blue button and disappears. Swap to a dark blue-tinted surface
+   so the theme-aware text keeps contrast; keep the accent border for the blue cue. */
+[data-ui-theme="dark"] .empty-state-template-btn {
+  background: #22344a;
+  border-color: var(--from-accent);
+}
+
+[data-ui-theme="dark"] .empty-state-template-btn:hover,
+[data-ui-theme="dark"] .empty-state-template-btn:focus-visible {
+  filter: brightness(1.15);
+}
+
 .empty-state-template-label {
   font-size: 14px;
   font-weight: 600;

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-06-26
+
+### Fixes and Maintenance
+
+- `src/css/map.css`: fixed unreadable template buttons in dark mode. The empty-state
+  template buttons use the fixed light-blue `--from-tint` background (shared by table
+  columns and map highlights, no dark override), while their label/desc use theme-aware
+  text tokens that turn light in dark mode, so a light label landed on a light-blue button
+  and disappeared. Added a `[data-ui-theme="dark"]` override giving the button a dark
+  blue-tinted surface (`#22344a`) with the accent border, plus a lighten-on-hover so the
+  hover cue works on the dark surface.
+
 ## 2026-06-25
 
 ### Additions and New Features
