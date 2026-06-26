@@ -1,5 +1,147 @@
 # Changelog
 
+## 2026-06-26
+
+### Additions and New Features
+
+- `docs/PSEUDO_CODE_FORMAT.md`: added the user-facing pseudo-code grammar contract
+  for the flowchart editor conversion, including syntax for all 8 legend shapes,
+  block normalization rules, decision and loop branch semantics, connector and
+  comment behavior, node ID stability, the submit-based `Update Flowchart` state
+  model, structural connector IDs, while/for-only loop scope, file formats, and
+  hand-traced password and FOR-loop node/edge examples.
+- `src/types.ts` and `src/themes.ts`: added the M1 shared flowchart model
+  contract with all 8 `NodeShape` values, typed flow-edge `branch`/`kind`
+  unions, source-backed `FlowDocument`, node-id keyed overrides, and
+  palette-only flowchart theme defaults.
+- `src/pseudo_lang/lexer.ts`, `src/pseudo_lang/normalize.ts`, `src/pseudo_lang/parser.ts`:
+  new pseudo-code language pipeline -- lexer tokenizes lines, normalizer resolves
+  indentation and block structure, parser produces a `FlowGraph` with typed nodes and
+  edges for all 8 legend shapes.
+- `src/derive_graph.ts`: `derive_graph()` entry point runs the full pipeline and returns
+  a `FlowGraph` (nodes, edges, warnings) from raw pseudo-code text.
+- `src/code_editor.tsx` + `src/pseudo_language.ts`: CodeMirror 6 editor panel with
+  pseudo-code syntax highlighting, line-error decorations, and controlled editor ratio.
+- `src/flow_node.tsx`: 8-shape SVG renderer mapping `NodeShape` values to diamond,
+  parallelogram, rounded-rect, cylinder, oval, and plain-rect outlines.
+- `src/flow_edge.tsx`: branch label (True/False), comment edge, and back-edge SVG
+  renderer with marker arrowheads and dashed back-edge style.
+- `src/layout_graph.ts`, `src/edge_geometry.ts`, `src/edge_routing.ts`: per-shape
+  bounding-box sizing and back-edge bypass routing on top of the Dagre layout backbone.
+- `src/templates.ts`: added `EXAMPLES` array of pseudo-code source strings (password
+  checker and FOR-loop examples) alongside the existing `TEMPLATES`.
+- `src/toolbar.tsx`: `.pseudo` plain-text Save and Open (file-picker) wired into the
+  toolbar; Save uses the editor source as the canonical file content.
+- `src/flow_edge.tsx`: green "True" / red "False" branch label colors, theme-aware
+  with accessible contrast.
+- `src/label_wrap.ts` (new post-migration module): condition text wrapping for
+  decision nodes; `src/layout_graph.ts` sizing and multi-line label rendering in
+  `src/flow_node.tsx` support a near-square rhombus (~1.3:1) decision diamond.
+- `README.md` and `docs/USAGE.md`: app screenshots added
+  (`docs/screenshots/password_check.png`, `docs/screenshots/for_loop_sum.png`),
+  captured via a forced `dist/` rebuild.
+
+### Behavior or Interface Changes
+
+- `README.md` and `AGENTS.md`: linked the new grammar contract so downstream
+  implementers can find the shape mapping and parser semantics before editing code.
+- `docs/PSEUDO_CODE_FORMAT.md`: corrected the grammar contract to the current
+  while/for-only loop scope. The doc now treats `repeat` and `until` as unsupported
+  reserved loop words with the parser-facing line-referenced error
+  `repeat/until loops are not supported. Use while or for.`, states that
+  normalization happens only after a successful `Update Flowchart` submit, and
+  requires stable structural connector IDs instead of line-based connector IDs.
+- `src/app_state.ts`: submit model -- graph updates only on `Update Flowchart`; on
+  success the editor text is canonicalized to the parsed form; on failure the text and
+  graph are preserved and a line-referenced error chip is shown.
+- True/False branch labels replace free-text verb labels on decision edges throughout
+  the renderer and layout engine.
+- `package.json`: format tag updated to `pseudo-code-flowchart`; package renamed to
+  `pseudo-code-mapper`.
+- `localStorage` keys migrated to `pseudo-code-flowchart:document`,
+  `pseudo-code-flowchart:ui-theme`, and `pseudo-code-flowchart:editor-ratio`.
+- `while` and `for` loops are supported; `repeat`/`until` is rejected with the parser
+  error `repeat/until loops are not supported. Use while or for.`
+- DOM hooks added: `flow-node` class, `data-node-id`, and `data-shape` attributes for
+  Playwright selectors.
+- `src/toolbar.tsx` (`load_source`): "Open source" now canonicalizes the loaded
+  text on load.
+- `src/app_state.ts`: boot-time parse error now logged via `console.warn` instead
+  of being silently swallowed.
+
+### Fixes and Maintenance
+
+- `docs/PSEUDO_CODE_FORMAT.md`: removed stale version/later-version wording from
+  loop semantics and clarified comment edge cases, submit behavior, and worked
+  while/for examples as the complete product scope for the pseudo-code grammar.
+- `src/types.ts` and `src/themes.ts`: kept deprecated concept-map compatibility
+  exports, including `ThemeShape`, `Theme`, `CmapDocument`, `concept_key`, and
+  `SHAPE_REGISTRY`, so downstream staged work packages can compile while they
+  move parser, codec, state, and rendering code onto the new flowchart model.
+- `package.json`: `ERESOLVE` resolved with minimal upper-bound caps --
+  `eslint` + `@eslint/js` pinned `<10`, `@babel/core` + `@babel/preset-typescript`
+  pinned `<8`; all other direct deps left at bare `>=` floors.
+- Full docset refresh: `docs/CODE_ARCHITECTURE.md`, `docs/FILE_STRUCTURE.md`,
+  `docs/USAGE.md`, `docs/INSTALL.md`, `README.md`, `docs/NEWS.md`,
+  `docs/RELATED_PROJECTS.md`, `docs/ROADMAP.md`, `docs/TODO.md`,
+  `docs/TROUBLESHOOTING.md`, `docs/COLOR_CONTRAST_ACCESSIBILITY.md`,
+  `docs/RELEASE_HISTORY.md`; `AGENTS.md` trimmed to pointers.
+- Fixed broken doc links to deleted files.
+
+### Removals and Deprecations
+
+- Deleted concept-map modules: `src/derive_concepts.ts`, `src/csv_codec.ts`,
+  `src/validate_document.ts`, `src/rubric_panel.tsx`, `src/graph_depth.ts`,
+  `src/label_layout.ts`, `src/label_wrap.ts`, `src/triples_table.tsx`,
+  `src/triple_row.tsx`, and their corresponding test files.
+- Renamed `src/concept_node.tsx` to `src/flow_node.tsx` and
+  `src/concept_edge.tsx` to `src/flow_edge.tsx`.
+- Moved the old concept-map implementation plan to `docs/archive/`.
+- Removed dead edge-hover code path; renamed hover identifiers:
+  `HoverState.conceptKey` -> `nodeId`, `tripleId` dropped,
+  `highlighted_concepts` -> `highlighted_nodes`,
+  `compute_flow_highlighted_concepts` -> `compute_flow_highlighted_nodes`.
+- Deleted dead modules `src/measure_text.ts`, `run_walkthrough_demo.sh`, and
+  `tests/playwright/walkthrough_demo.mts`.
+- Removed unused `ARROW_HIGHLIGHT` marker infrastructure and dead CSS (rubric
+  remnants, unused tokens).
+
+### Decisions and Failures
+
+- Text-as-source-of-truth: the pseudo-code editor is the canonical document; the
+  `FlowGraph` is fully derived on submit. Kept the Dagre layout backbone.
+- Structural (not line-based) connector IDs: edge IDs are derived from source/target
+  node IDs and branch label, making them stable across re-parses.
+- Back edges are excluded from the Dagre graph to preserve the DAG invariant and
+  are routed at render time; this fixes the broken loop display seen on the reference
+  site.
+- `repeat`/`until` excluded by design: post-test loop semantics would reverse the
+  True/False branch label convention; out of scope for this release.
+- A 6-pass audit (plan, test, style, docs, legacy, comment) drove the post-migration
+  cleanups.
+- Dependency ranges use bare `>=` with caps only where a peer conflict forces them
+  (per project convention; the central `TYPESCRIPT_STYLE.md` cap-every-dep rule is
+  reconciled upstream, not in this tree).
+- Edge-hover cross-highlight removed as dead code (out of scope); node-hover
+  cross-highlight remains.
+- `from_pseudo_source` kept as the codec source-load constructor.
+- Operational note: `run_playwright_tests.sh` serves a prebuilt `dist/`, so visual
+  changes require a `--build` flag to appear in the browser and screenshots.
+
+### Developer Tests and Notes
+
+- Parser fixtures and snapshots run via `node --test`; codec round-trip tests cover
+  all 8 shapes; flow-geometry unit tests in `tests/test_flow_geometry.mjs`.
+- 37 Playwright specs added, including password-checker and FOR-loop screenshot
+  comparisons.
+- Final gate results: `check_codebase.sh` 5/5, `pytest` 634 tests, Playwright 37/37,
+  `tsc` 0 errors.
+- Added `tests/test_flow_geometry.mjs` tests for `flow_edge_path` and back-edge routing.
+- Added comment-parser and dashed-comment-export coverage.
+- Pruned fragile and obsolete tests across the suite.
+- Final gates post-migration: `check_codebase.sh` 5/5, `pytest tests/` pass,
+  Playwright 38/38 (with `--build`).
+
 ## 2026-06-25
 
 ### Additions and New Features

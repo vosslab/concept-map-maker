@@ -1,118 +1,79 @@
-// label_wrap.ts -- shared VERB/EDGE label sizing source of truth.
-// This module owns the size and wrapping of edge verb labels only; it does not
-// size node bubbles. The dagre layout module (src/layout_graph.ts), the edge
-// renderer (src/concept_edge.tsx), and the label placement helper
-// (src/edge_geometry.ts) all import from here so the wrapped text dimensions
-// used to reserve graph space, render tspans, and place labels cannot drift.
-// Zero DOM or Solid imports; this module is pure TypeScript.
+// label_wrap.ts - pure text-wrapping helpers for flow-node labels.
+//
+// No DOM or Solid imports: both the layout sizer (layout_graph.ts) and the
+// renderer (flow_node.tsx) import this module so they agree on exactly how a
+// label breaks into lines. If the two disagreed on line breaks, the reserved
+// node size and the rendered text block would drift apart.
+//
+// Today only the decision diamond wraps its condition; the helper itself is
+// generic so other shapes can opt in later by calling wrap_label with their own
+// max-character budget.
 
-// Verb/edge label font size in pixels. The single source of truth for the
-// rendered font-size and the char-advance estimate below, so the rendered font
-// and the wrap/size math stay linked.
-export const LABEL_FONT_SIZE_PX = 12;
+// Maximum characters per wrapped line for a decision condition. Chosen so a
+// typical condition like "password == stored_password" breaks into two balanced
+// lines instead of one long line that would stretch the diamond into a flat
+// lozenge.
+export const DECISION_WRAP_MAX_CHARS = 16;
 
-// Estimated character advance width at the 12px web-safe label font.
-export const LABEL_CHAR_W_PX = 6.6;
-
-// Extra clearance padding (px) added around the label AABB when placing it, so
-// a placed label keeps a small visual gap from a bubble rather than touching it.
-export const LABEL_CLEAR_MARGIN_PX = 4;
-
-// Line-box height for a 12px label.
-export const LABEL_LINE_H_PX = 14;
-
-// Wrap target: approximately 12-13 chars before starting a new line.
-export const LABEL_MAX_LINE_PX = 84;
-
-// Maximum number of wrapped lines; overflow words are appended to the last line.
-export const LABEL_MAX_LINES = 3;
+// Vertical advance (in user units) between wrapped label lines. Comfortably
+// larger than the 14px label font so stacked lines do not touch. Shared so the
+// diamond sizer and the tspan renderer reserve and draw the same block height.
+export const DECISION_LINE_HEIGHT_PX = 18;
 
 //============================================
-
-// wrap_verb_label -- greedy word-wrap a verb string into an array of line strings.
-//
-// Rules:
-//   - Trims the verb; returns [] for empty/whitespace input.
-//   - Accumulates words onto the current line while estimated width fits.
-//   - A single word wider than LABEL_MAX_LINE_PX stays on its own line (no mid-word split).
-//   - Stops wrapping after LABEL_MAX_LINES; remaining words are appended to the last line.
-//   - Never drops words.
-export function wrap_verb_label(verb: string): string[] {
-  const trimmed = verb.trim();
-  // Return empty array for empty/whitespace input.
-  if (trimmed.length === 0) {
-    return [];
+// wrap_label
+//============================================
+// Greedy word wrap: accumulate words onto the current line until adding the next
+// word would exceed max_chars, then start a new line. A single word longer than
+// max_chars stands alone on its own line; identifiers are never split mid-word,
+// since breaking "stored_password" would hurt readability more than overflowing.
+// Returns at least one line so callers can always index line zero.
+export function wrap_label(text: string, max_chars: number): string[] {
+  // split on any run of whitespace and drop empties so leading/trailing or
+  // doubled spaces do not create blank words
+  const words = text.split(/\s+/).filter((word) => word.length > 0);
+  // a label with no words (empty or whitespace-only) still returns one line
+  if (words.length === 0) {
+    return [text];
   }
-
-  const words = trimmed.split(/\s+/);
   const lines: string[] = [];
-  let current_line = "";
-
+  // the line currently being assembled; flushed into lines when it would overflow
+  let current = "";
   for (const word of words) {
-    // If we have already filled the max lines, append remaining words to the last line.
-    if (lines.length >= LABEL_MAX_LINES) {
-      const last = lines[lines.length - 1];
-      lines[lines.length - 1] = last + " " + word;
+    // first word on a fresh line always starts the line, even if it overflows
+    if (current === "") {
+      current = word;
       continue;
     }
-
-    if (current_line.length === 0) {
-      // Start the first word of a new line unconditionally (no mid-word splitting).
-      current_line = word;
+    // would-be line if this word were appended to the current line
+    const candidate = current + " " + word;
+    if (candidate.length > max_chars) {
+      // appending would overflow: flush the current line and start a new one
+      lines.push(current);
+      current = word;
     } else {
-      // Check if appending this word keeps us within the max line width.
-      const candidate = current_line + " " + word;
-      const candidate_width = candidate.length * LABEL_CHAR_W_PX;
-      if (candidate_width <= LABEL_MAX_LINE_PX) {
-        current_line = candidate;
-      } else {
-        // Flush the current line and begin a new one with this word.
-        lines.push(current_line);
-        if (lines.length >= LABEL_MAX_LINES) {
-          // Cap reached while flushing; append remaining word to the last pushed line.
-          const last = lines[lines.length - 1];
-          lines[lines.length - 1] = last + " " + word;
-          current_line = "";
-        } else {
-          current_line = word;
-        }
-      }
+      // still fits: keep the word on the current line
+      current = candidate;
     }
   }
-
-  // Push the last in-progress line if it has content.
-  if (current_line.length > 0) {
-    if (lines.length >= LABEL_MAX_LINES) {
-      const last = lines[lines.length - 1];
-      lines[lines.length - 1] = last + " " + current_line;
-    } else {
-      lines.push(current_line);
-    }
+  // flush the final in-progress line
+  if (current !== "") {
+    lines.push(current);
   }
-
   return lines;
 }
 
 //============================================
-
-// label_box -- compute the bounding box dimensions for a wrapped label.
-//
-// width  = max estimated pixel width across all lines (0 for empty input).
-// height = total height for the given number of lines (0 for empty input).
-export function label_box(lines: string[]): { width: number; height: number } {
-  if (lines.length === 0) {
-    return { width: 0, height: 0 };
-  }
-
-  // Find the longest line width in pixels.
-  let max_width = 0;
+// longest_line_length
+//============================================
+// Character count of the widest wrapped line. The diamond sizer uses this to
+// estimate the wrapped text block width.
+export function longest_line_length(lines: string[]): number {
+  let longest = 0;
   for (const line of lines) {
-    const line_width = line.length * LABEL_CHAR_W_PX;
-    if (line_width > max_width) {
-      max_width = line_width;
+    if (line.length > longest) {
+      longest = line.length;
     }
   }
-
-  const height = lines.length * LABEL_LINE_H_PX;
-  return { width: max_width, height };
+  return longest;
 }

@@ -1,8 +1,8 @@
 # Install
 
-Installed means the npm dev dependencies are present in `node_modules/` so the app can be
-built into `dist/` and served locally. The app itself is browser-only; end users need no
-install, only a browser pointed at the built page.
+Installed means the npm dev dependencies are present in `node_modules/` so the pseudo-code
+flowchart editor can be built into `dist/` and served locally. The app itself is browser-only;
+end users need no install, only a browser pointed at the built page.
 
 ## Requirements
 
@@ -10,8 +10,8 @@ install, only a browser pointed at the built page.
 - Python 3.12 for the local web server and developer hygiene tests
   (`run_web_server.sh` uses `python3 -m http.server`).
 - Python dev tools for the pytest suite are listed in
-  [../pip_requirements-dev.txt](../pip_requirements-dev.txt) (bandit, packaging,
-  pyflakes, pytest, rich).
+  [../pip_requirements-dev.txt](../pip_requirements-dev.txt) (bandit, pyflakes,
+  pytest, rich).
 
 ## Install steps
 
@@ -48,8 +48,9 @@ Produces the production bundle in `dist/`. Run once after install before serving
 bash run_web_server.sh
 ```
 
-Serves `dist/` via Python's `http.server`. Open the URL printed in the terminal
-(usually `http://localhost:8080`).
+Builds `dist/` and serves it via Python's `http.server` on a random port in the
+8000-8999 range. Open the URL printed in the terminal. On macOS a browser tab
+opens automatically.
 
 ## Verify install
 
@@ -65,8 +66,10 @@ Browser tests (requires Playwright install step above):
 bash run_playwright_tests.sh
 ```
 
-## Known gaps
+## Python dev tools
 
-- [ ] Document the pip install command for the dev tools once a repo-standard
-  command is confirmed (pip_requirements-dev.txt exists; Brewfile and
-  pip_requirements.txt are currently empty).
+Install the pytest suite dependencies:
+
+```bash
+source source_me.sh && pip install -r pip_requirements-dev.txt
+```

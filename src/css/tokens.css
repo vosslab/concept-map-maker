@@ -1,25 +1,15 @@
 /* tokens.css - design tokens: :root variables and theme overrides */
 
 /* ============================================================
-   Design tokens: From/To tints (shared by table columns and map highlights)
+   Design tokens: highlight accent (used by map highlights and editor controls)
    ============================================================ */
 :root {
-  /* From column: soft blue */
+  /* Focus/highlight accent: soft blue */
   --from-tint: #cfe8ff;
   --from-accent: #5aabff;
 
-  /* To column: soft amber */
-  --to-tint: #ffe2b8;
-  --to-accent: #e8990a;
-
-  /* Active-concept "same" highlight: soft green, distinct from from/to.
-     Used by the per-cell triple-table highlighting (cell-same). */
-  --same-tint: #cdebcb;
-  --same-accent: #3a9d3a;
-
   /* Layout constants */
   --toolbar-height: 48px;
-  --rubric-height: 140px;
   --editor-ratio: 40%;
   --gap: 8px;
   --pad: 12px;

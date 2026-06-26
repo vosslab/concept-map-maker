@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Known issues, fixes, and debugging steps for Concept Map Maker.
+Known issues, fixes, and debugging steps for the pseudo-code flowchart editor.
 
 ## Build and tooling
 
@@ -27,16 +27,23 @@ this file exists before printing success.
 
 ## Runtime issues
 
-### Map is blank after import
+### Flowchart is blank after loading a saved project
 
-Check that the JSON file has `format: "concept-map-maker"` and `version: 1`.
-Unknown or missing version fields are rejected by the document codec. See
+Check that the JSON file has `"format": "pseudo-code-flowchart"` and `"version": 1`.
+Unknown or missing format/version fields are rejected by the document codec. See
 [docs/FILE_FORMATS.md](FILE_FORMATS.md) for the schema.
 
-### Dark mode: dropdown text is dark-on-dark
+### Work is missing after a page reload
 
-This was fixed in the 26.06 release. Hard-reload the page (`Cmd+Shift+R` / `Ctrl+Shift+R`)
-to clear any cached stylesheet. If self-hosting, ensure `dist/` was rebuilt.
+The app autosaves to `localStorage` under the key `pseudo-code-flowchart:document`.
+If localStorage was cleared (private browsing, explicit browser clear, or storage
+quota exceeded), previous work is lost. Use "Save project" to keep a `.json` backup.
+
+### Dark mode: text is dark-on-dark
+
+Hard-reload the page (`Cmd+Shift+R` / `Ctrl+Shift+R`) to clear any cached
+stylesheet. If self-hosting, ensure `dist/` was rebuilt after the latest source
+change.
 
 ### Toolbar icons are missing (blank buttons)
 
@@ -45,16 +52,20 @@ boxes, the font file is not being served. When using `run_web_server.sh`, the
 server must serve from the repo root so `vendor/` is reachable. For GitHub Pages,
 `build_github_pages.sh` copies `vendor/` into `dist/vendor/`.
 
+### Theme preference is not remembered across reloads
+
+The UI theme is stored in `localStorage` under `pseudo-code-flowchart:ui-theme`.
+If localStorage is unavailable (for example, third-party cookie/storage is blocked),
+the theme falls back to the OS dark-mode preference on every load.
+
 ## Accessibility known issues (as of 26.06)
 
 The following WCAG 2.1 AA gaps were identified in the 2026-06-12 audit and have
 not yet been fixed:
 
-- Cell highlight roles (`cell-same`, `cell-from`, `cell-to`) are communicated by
-  tint only (WCAG 1.4.1). Fix: add a non-color indicator (icon or pattern).
 - Pane resizer focus outline has insufficient contrast (WCAG 2.4.11).
 - `--color-text` CSS token is undefined in some contexts.
 - Toolbar group captions are not programmatically associated with their buttons
   (WCAG 1.3.1).
 
-See `docs/active_plans/audits/ui_refinements_a11y_audit.md` for the full audit.
+See [docs/active_plans/audits/ui_refinements_a11y_audit.md](active_plans/audits/ui_refinements_a11y_audit.md) for the full audit.

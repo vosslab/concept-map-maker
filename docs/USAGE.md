@@ -1,120 +1,86 @@
-# USAGE.md
+# Usage
 
-How to run the tools in this repository.
+How to run and use the pseudo-code flowchart editor.
 
-## reset_repo.py
+## Running the app
 
-`reset_repo.py` is the bootstrap entry point for a new consumer repo cloned from this
-template. It runs an interactive interview (project type, code license, docs license,
-PyPI intent, stage, commit), writes the `REPO_TYPE` marker, installs license files,
-seeds `pyproject.toml` when PyPI is requested, runs propagation, and removes
-template-meta paths.
-
-### Normal use (interactive)
+Build and serve the app locally:
 
 ```bash
-source source_me.sh && python3 reset_repo.py
+bash run_web_server.sh
 ```
 
-The script interviews you in your terminal. No flags are required for normal use.
+This builds `dist/` and starts a Python HTTP server on a random port in the
+8000-8999 range. Open the URL printed in the terminal. On macOS a browser tab
+opens automatically.
 
-### CLI flags
-
-| Flag | Description |
-| --- | --- |
-| `--config <file>` | Supply interview answers from a JSON file (testing/reproducibility mode) |
-| `--dry-run` | Log planned actions without writing any files |
-| `-h` | Show help and exit |
-
-### Config mode (testing/reproducibility interface)
-
-`--config` is intended for automated testing and reproducible resets, not for
-routine human use. Pass a JSON file with the interview answers:
+To build without serving (for GitHub Pages or manual inspection):
 
 ```bash
-source source_me.sh && python3 reset_repo.py --config my_config.json
+bash build_github_pages.sh
 ```
 
-Config mode is non-interactive: the script reads answers from the file and proceeds
-without prompting. This replaces the interactive interview for the run.
+## Editing pseudo-code
 
-#### JSON schema
+1. Type or paste pseudo-code in the left-pane editor. The grammar is defined in
+   [PSEUDO_CODE_FORMAT.md](PSEUDO_CODE_FORMAT.md).
+2. Click **Update Flowchart** in the toolbar (or press the assigned shortcut) to
+   parse the source and render the flowchart diagram on the right.
+3. Drag nodes to adjust positions. Drag the background to pan the canvas.
+   Double-click the background to reset the view. Manual node positions are
+   remembered until the document is cleared.
 
-| Key | Required | Values | Notes |
-| --- | --- | --- | --- |
-| `project_type` | YES | `python` / `p`, `typescript` / `t`, `rust` / `r`, `other` / `o` | Short alias or full token |
-| `code_license` | YES | SPDX identifier or alias (e.g. `MIT`, `m`, `GPL-3.0`, `g`) | Resolved via `resolve_license` |
-| `docs_license` | no | SPDX identifier or alias | Default: `CC-BY-4.0` |
-| `pypi` | no | `true` / `false` | Default: `false`; Python-only |
-| `stage` | no | `true` / `false` | Default: `true` |
-| `commit` | no | `true` / `false` | Default: `false` |
+## Saving and loading work
 
-#### Minimal example
+The app autosaves to `localStorage` on every source change (500 ms debounce). Work
+persists across page reloads automatically.
 
-```json
-{
-  "project_type": "python",
-  "code_license": "GPL-3.0"
-}
-```
+For explicit file-based save/load:
 
-#### Full example
+- **Save project** - writes a `.json` FlowDocument file.
+- **Open project** - reads a `.json` FlowDocument file and replaces the current
+  document.
+- **Save source** - writes the raw pseudo-code text as a `.pseudo` file.
+- **Open source** - reads a `.pseudo` file into the editor.
 
-```json
-{
-  "project_type": "typescript",
-  "code_license": "MIT",
-  "docs_license": "CC-BY-4.0",
-  "stage": false,
-  "commit": false
-}
-```
+See [FILE_FORMATS.md](FILE_FORMATS.md) for the file format details.
 
-### Folder-name guard
+## Templates
 
-The script refuses to run when the repo root directory is named exactly
-`starter-repo-template`. This protects the template development checkout from
-accidental destruction.
+The toolbar includes an **Examples** group with prefilled pseudo-code programs.
+Click any button to load that program; if the current document has content you
+will be asked to confirm before the existing work is replaced. The same buttons
+appear in the empty-state panel shown when the document source is empty.
 
-If you see this error, clone or rename the repo to your project name first:
+![Password check: if-else flowchart with red False and green True branches](screenshots/password_check.png)
 
-```
-This repo is named starter-repo-template. Clone or rename it to the consumer project name before running reset.
-```
+![For loop sum: loop hexagon with a back-edge](screenshots/for_loop_sum.png)
 
-The guard checks the folder name only; it does not inspect remotes or origin URLs.
+## Exporting the flowchart
 
-### Outside a git repo
+The toolbar provides:
 
-Running `reset_repo.py` outside a git repository exits with a clear message
-instead of a raw subprocess traceback.
+- **Save SVG** - vector export (pan/zoom transform stripped; always light-mode
+  colors).
+- **Save PNG** - rasterized export (capped at 8000 px on the long side).
+- **Print** - opens the browser print dialog.
 
-## E2E test harness
+## Developer checks
 
-For the clone-based reset E2E harness (LOCAL and REMOTE modes), see
-[E2E_TESTS.md](E2E_TESTS.md) and the inline documentation in
-`tests/meta/e2e/e2e_reset_routing.py`. The harness is template-meta:
-it lives under `tests/meta/e2e/` and is removed by reset.
-
-Run all offline E2E tests:
+Run the full TypeScript gate (typecheck, ESLint, Prettier, node unit tests):
 
 ```bash
-bash tests/meta/e2e/run_all.sh
+bash check_codebase.sh
 ```
 
-Run a single E2E test:
+Run browser-driven Playwright tests:
 
 ```bash
-source source_me.sh && python3 tests/meta/e2e/e2e_reset_routing.py
+bash run_playwright_tests.sh
 ```
 
-## Concept map app
+Run Python hygiene tests (whitespace, ASCII, markdown links, shebangs):
 
-Open `index.html` in a browser (or run `bash run_web_server.sh` for local dev) to use the app.
-
-### Examples picker
-
-The toolbar includes an **Examples** group with three prefilled concept maps (Honeybees, Water
-cycle, Photosynthesis). Click any button to load that map; if the current map has triples you will
-be asked to confirm before the existing content is replaced. The same three buttons appear in the
-empty-state panel shown when the map has no triples.
+```bash
+pytest tests/
+```

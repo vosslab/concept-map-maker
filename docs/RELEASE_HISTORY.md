@@ -10,8 +10,9 @@ For curated highlights, see [docs/NEWS.md](NEWS.md).
 | --- | --- | --- |
 | 26.06 | 2026-06-12 | First public GitHub Pages release. Two-state theme, CSS split, Font Awesome icons, commit-time column autosize, per-cell highlight, draggable pane resizer, print light-mode fix. |
 
-## Known gaps
+## Release recording decision
 
-- Versions before 26.06 were pre-release development iterations without
-  formal release tags.
-  Task: add a row for each git tag once tags are created for earlier milestones.
+This file records releases starting at the next tagged version.
+Versions before 26.06 were pre-release iterations without formal tags and are not recorded here.
+The detailed change history for the pseudo-code-flowchart conversion lives in [docs/CHANGELOG.md](CHANGELOG.md).
+A new version row is added to the table above when work is tagged for release.

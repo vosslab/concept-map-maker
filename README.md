@@ -1,33 +1,21 @@
-# Concept Map Maker
+# Pseudo-code Flowchart Editor
 
-Browser-only tool for students building concept maps: enter triples in a spreadsheet table, get an auto-laid-out SVG map with live rubric validation, drag-to-adjust layout, and one-click PNG/SVG/JSON/CSV export.
-
-## Overview
-
-Students in life-science courses build concept maps where bubbles hold a 1-3 word concept (noun)
-and directed arrows carry verb phrases ("concept maps --organize--> ideas"). This app runs entirely
-in the browser with no install, no account, and no backend. Students enter rows in a
-spreadsheet-like triples table (This concept | verb phrase | points to this concept); the app
-auto-generates an SVG map using dagre auto-layout, colors bubbles by graph distance from origin
-bubbles, validates the assignment rubric live (30+ unique concepts, a verb phrase on every arrow),
-and saves work automatically in localStorage. Exports include PNG, SVG, JSON, CSV, and print.
-
-The UI includes a two-state light/dark theme toggle; the on-screen concept map adapts to the
-selected theme while SVG/PNG exports remain light. The app is deployed on GitHub Pages and runs
-with no server.
+Browser-only flowchart editor for developers and students: write pseudo-code in the left pane, click Update Flowchart, and get an auto-laid-out SVG diagram with eight node shapes, True/False branch labels, and correct loop back-edges.
 
 ## Documentation
 
 Getting started:
 
 - [docs/INSTALL.md](docs/INSTALL.md) - setup steps, dependencies, and install verification
-- [docs/USAGE.md](docs/USAGE.md) - how to run the app, build maps, save work, and run dev checks
+- [docs/USAGE.md](docs/USAGE.md) - how to run the app, edit pseudo-code, and save work
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - known issues, fixes, and debugging steps
 
 Reference:
 
 - [docs/CODE_ARCHITECTURE.md](docs/CODE_ARCHITECTURE.md) - components, data flow, and build pipeline
 - [docs/FILE_STRUCTURE.md](docs/FILE_STRUCTURE.md) - directory map and where new work goes
-- [docs/FILE_FORMATS.md](docs/FILE_FORMATS.md) - project JSON, triples CSV, paste, and export formats
+- [docs/FILE_FORMATS.md](docs/FILE_FORMATS.md) - .pseudo source and FlowDocument JSON formats
+- [docs/PSEUDO_CODE_FORMAT.md](docs/PSEUDO_CODE_FORMAT.md) - pseudo-code grammar and flowchart shape mapping
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) - chronological record of changes grouped by date
 
 Style and testing:
@@ -42,9 +30,14 @@ Style and testing:
 
 ```bash
 npm install
-bash build_github_pages.sh
 bash run_web_server.sh
 ```
+
+## Screenshots
+
+![Password check: if-else flowchart with red False and green True branches](docs/screenshots/password_check.png)
+
+![For loop sum: loop hexagon with a back-edge](docs/screenshots/for_loop_sum.png)
 
 ## Testing
 

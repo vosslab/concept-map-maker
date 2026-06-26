@@ -25,7 +25,6 @@
 
   /* Hide interactive chrome */
   .toolbar,
-  .rubric-panel,
   .editor-pane {
     display: none !important;
   }
