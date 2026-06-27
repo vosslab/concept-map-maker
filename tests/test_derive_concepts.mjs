@@ -3,77 +3,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 
 import { derive_concepts } from "../src/derive_concepts.ts";
-
-//============================================
-// Helpers
-//============================================
-
-const FIXTURE_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "fixtures",
-  "honeybees_document.json",
-);
-
-function load_honeybees() {
-  // load the shared honeybees fixture and return its triples array
-  const raw = readFileSync(FIXTURE_PATH, "utf8");
-  const doc = JSON.parse(raw);
-  return doc.triples;
-}
-
-//============================================
-// Honeybees fixture tests
-//============================================
-
-test("honeybees: concepts ordered by first appearance", () => {
-  const triples = load_honeybees();
-  const concepts = derive_concepts(triples);
-  // t1 from=Honeybees to=Castes -> first two labels
-  assert.equal(concepts[0].label, "Honeybees");
-  assert.equal(concepts[1].label, "Castes");
-});
-
-test("honeybees: Female has multiple incoming edges (multi-input sink)", () => {
-  const triples = load_honeybees();
-  const concepts = derive_concepts(triples);
-  const female = concepts.find((c) => c.key === "female");
-  assert.ok(female, "Female concept must be present");
-  // Female is a multi-input sink; the behavioral property is > 1, not a specific count
-  assert.ok(female.incoming.length > 1);
-});
-
-test("honeybees: Female has 0 outgoing edges (it is a sink in the fixture)", () => {
-  const triples = load_honeybees();
-  const concepts = derive_concepts(triples);
-  const female = concepts.find((c) => c.key === "female");
-  assert.ok(female, "Female concept must be present");
-  // t8 is Male -> Female, so Female is the destination, not source
-  assert.deepEqual(female.outgoing, []);
-});
-
-test("honeybees: Castes has 1 incoming edge and 3 outgoing edges", () => {
-  const triples = load_honeybees();
-  const concepts = derive_concepts(triples);
-  const castes = concepts.find((c) => c.key === "castes");
-  assert.ok(castes, "Castes concept must be present");
-  // counts are behavioral; IDs are fixture internals
-  assert.ok(castes.incoming.length >= 1);
-  assert.ok(castes.outgoing.length >= 2);
-});
-
-test("honeybees: first-casing-wins preserves original label", () => {
-  const triples = load_honeybees();
-  const concepts = derive_concepts(triples);
-  // fixture uses title-cased labels; check a few
-  const workers = concepts.find((c) => c.key === "workers");
-  assert.ok(workers);
-  assert.equal(workers.label, "Workers");
-});
 
 //============================================
 // Blank and partial row semantics

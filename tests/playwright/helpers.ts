@@ -1,7 +1,7 @@
 // helpers.ts - shared Playwright helpers for concept-map-maker specs.
 //
-// Provides a reusable enter_triple function and a paste_tsv helper used across
-// multiple spec files so each spec stays focused on the behavior it verifies.
+// Provides a reusable enter_triple function used across multiple spec files so
+// each spec stays focused on the behavior it verifies.
 //
 // Interactions:
 //   - from/to cells: ConceptAutocomplete inputs (blur commits after 150ms).
@@ -57,37 +57,4 @@ export async function enter_triple(
   await to_input.press("Tab");
   // Wait for the 150ms blur timer in ConceptAutocomplete to fire.
   await page.waitForTimeout(BLUR_SETTLE_MS);
-}
-
-//============================================
-// paste_tsv
-//============================================
-// Dispatch a synthetic paste event carrying TSV text to the triples-rows
-// container. The triples table intercepts multi-cell paste (text with tabs/newlines)
-// and calls bulk_insert_triples. Returns after waiting for the bulk insert to
-// complete (one animation frame).
-export async function paste_tsv(page: Page, tsv_text: string): Promise<void> {
-  // Dispatch the paste event directly via evaluate. The triples-rows onPaste
-  // handler fires on any paste event that bubbles up to it, regardless of focus.
-  // We dispatch on the triples table wrapper so the event reaches the handler.
-  await page.evaluate((text) => {
-    // Try triples-rows first; fall back to triples-table.
-    const target =
-      document.querySelector(".triples-rows") ?? document.querySelector(".triples-table");
-    if (target === null) {
-      throw new Error("triples container not found");
-    }
-    // Build a DataTransfer with the TSV text and dispatch a paste event.
-    const dt = new DataTransfer();
-    dt.setData("text/plain", text);
-    const event = new ClipboardEvent("paste", {
-      clipboardData: dt,
-      bubbles: true,
-      cancelable: true,
-    });
-    target.dispatchEvent(event);
-  }, tsv_text);
-
-  // Wait for Solid's reactive updates to settle (reactive store update + layout).
-  await page.waitForTimeout(300);
 }

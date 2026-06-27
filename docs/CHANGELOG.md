@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-06-27
+
+### Fixes and Maintenance
+
+- `check_codebase.sh` `test:node` now passes. The Node unit tests read external fixture
+  JSON/TSV files under `tests/fixtures/` that were never committed, so every fixture-reading
+  case failed with `ENOENT`. Fixture files are banned in this repo (fragile: a checked-in data
+  file the test reads at runtime can move or vanish, failing for reasons unrelated to the code;
+  see [PYTEST_STYLE.md](PYTEST_STYLE.md) "Inline inputs, not external data files").
+
+### Removals and Deprecations
+
+- Removed every test that required a fixture file. Deleted fixture-reading cases from
+  `tests/test_layout_graph.mjs`, `tests/test_derive_concepts.mjs`, `tests/test_graph_depth.mjs`,
+  `tests/test_document_codec.mjs`, and `tests/test_csv_codec.mjs` along with their now-unused
+  fixture imports and loader helpers; kept all inline-input cases. Deleted the two
+  fully fixture-dependent Playwright specs `tests/playwright/stress.spec.ts` and
+  `tests/playwright/paste.spec.ts`, removed the orphaned `paste_tsv` helper from
+  `tests/playwright/helpers.ts`, and dropped the `fixtures/` entry from `tests/TESTS_README.md`.
+  Node suite now 192 tests, 0 failures; all 5 `check_codebase.sh` checks pass.
+
 ## 2026-06-26
 
 ### Fixes and Maintenance

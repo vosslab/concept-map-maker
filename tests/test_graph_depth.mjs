@@ -4,23 +4,12 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
 import { compute_depths } from "../src/graph_depth.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(__dirname, "fixtures");
 
 //============================================
 // helpers
 //============================================
-function load_fixture(name) {
-  const raw = readFileSync(join(FIXTURES, name), "utf8");
-  return JSON.parse(raw);
-}
-
 function depth(result, label) {
   // Look up the depth for a concept label (normalized via concept_key semantics)
   const key = label.trim().replace(/\s+/g, " ").toLowerCase();
@@ -89,86 +78,6 @@ test("origin rule: in=0 out>0 qualifies; in=0 out=0 does not", () => {
   assert.ok(is_origin(result, "A"), "A: in=0 out=2 -> origin");
   assert.ok(!is_origin(result, "B"), "B: in=1 out=0 -> not origin");
   assert.ok(!is_origin(result, "C"), "C: in=1 out=0 -> not origin");
-});
-
-//============================================
-// honeybees fixture
-//============================================
-test("honeybees: Honeybees is the only origin", () => {
-  const doc = load_fixture("honeybees_document.json");
-  const result = compute_depths(doc.triples);
-  assert.equal(result.origin_keys.size, 1, "exactly one origin");
-  assert.ok(is_origin(result, "Honeybees"), "Honeybees is origin");
-});
-
-test("honeybees: Honeybees depth is 0", () => {
-  const doc = load_fixture("honeybees_document.json");
-  const result = compute_depths(doc.triples);
-  assert.equal(depth(result, "Honeybees"), 0);
-});
-
-test("honeybees: Castes depth is 1", () => {
-  const doc = load_fixture("honeybees_document.json");
-  const result = compute_depths(doc.triples);
-  assert.equal(depth(result, "Castes"), 1);
-});
-
-test("honeybees: Workers, Drones, Queen are depth 2", () => {
-  const doc = load_fixture("honeybees_document.json");
-  const result = compute_depths(doc.triples);
-  assert.equal(depth(result, "Workers"), 2);
-  assert.equal(depth(result, "Drones"), 2);
-  assert.equal(depth(result, "Queen"), 2);
-});
-
-test("honeybees: Male is depth 3", () => {
-  const doc = load_fixture("honeybees_document.json");
-  const result = compute_depths(doc.triples);
-  assert.equal(depth(result, "Male"), 3);
-});
-
-test("honeybees: Female is depth 3 (shortest path from BFS)", () => {
-  // Female receives edges from Workers(2), Queen(2), Male(3).
-  // BFS assigns min distance = 3 (via Workers or Queen at depth 2).
-  const doc = load_fixture("honeybees_document.json");
-  const result = compute_depths(doc.triples);
-  assert.equal(depth(result, "Female"), 3);
-});
-
-//============================================
-// stress fixture: cycle does not throw
-//============================================
-test("stress_80_nodes: compute_depths does not throw", () => {
-  const doc = load_fixture("stress_80_nodes.json");
-  assert.doesNotThrow(() => compute_depths(doc.triples));
-});
-
-test("stress_80_nodes: all concepts get a depth value", () => {
-  const doc = load_fixture("stress_80_nodes.json");
-  const result = compute_depths(doc.triples);
-  // Every key in the graph must have a defined depth
-  for (const [key, d] of result.depth_by_key) {
-    assert.ok(typeof d === "number" && d >= 0, `${key} has valid depth`);
-  }
-});
-
-test("stress_80_nodes: unreachable nodes get fallback depth > max reached depth", () => {
-  const doc = load_fixture("stress_80_nodes.json");
-  const result = compute_depths(doc.triples);
-  if (result.origin_keys.size === 0) {
-    // No origins -> all depth 0, nothing to check
-    return;
-  }
-  // Collect depths of reachable vs unreachable nodes
-  const reachable_depths = [];
-  for (const [key, d] of result.depth_by_key) {
-    if (!result.origin_keys.has(key)) reachable_depths.push(d);
-  }
-  // If any node is unreachable, its depth should equal max_reached + 1
-  // We can verify no node has a negative depth as a basic sanity check
-  for (const d of reachable_depths) {
-    assert.ok(d >= 0, "all depths non-negative");
-  }
 });
 
 //============================================

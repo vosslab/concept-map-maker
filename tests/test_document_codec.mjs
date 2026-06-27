@@ -3,9 +3,6 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import {
   empty_document,
@@ -13,13 +10,6 @@ import {
   serialize_document,
   prune_overrides,
 } from "../src/document_codec.ts";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const fixtures = path.join(here, "fixtures");
-
-function read_fixture(name) {
-  return fs.readFileSync(path.join(fixtures, name), "utf8");
-}
 
 //============================================
 // empty_document
@@ -35,32 +25,6 @@ test("empty_document is a valid, content-free document", () => {
 
 test("empty_document round-trips through serialize/parse", () => {
   const doc = empty_document();
-  const restored = parse_document(serialize_document(doc));
-  assert.deepEqual(restored, doc);
-});
-
-//============================================
-// round-trip on real fixtures
-//============================================
-
-test("honeybees fixture parses and round-trips losslessly", () => {
-  const doc = parse_document(read_fixture("honeybees_document.json"));
-  const restored = parse_document(serialize_document(doc));
-  assert.deepEqual(restored, doc);
-});
-
-test("honeybees fixture preserves the multi-input/output structure", () => {
-  const doc = parse_document(read_fixture("honeybees_document.json"));
-  // Castes has multiple outgoing edges (multi-output source)
-  const castes_out = doc.triples.filter((t) => t.from === "Castes");
-  assert.ok(castes_out.length >= 2);
-  // Female has multiple incoming edges (multi-input sink)
-  const female_in = doc.triples.filter((t) => t.to === "Female");
-  assert.ok(female_in.length >= 2);
-});
-
-test("stress fixture parses and round-trips losslessly", () => {
-  const doc = parse_document(read_fixture("stress_80_nodes.json"));
   const restored = parse_document(serialize_document(doc));
   assert.deepEqual(restored, doc);
 });

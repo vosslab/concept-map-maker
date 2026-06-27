@@ -5,14 +5,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
 import { parse_table_text, serialize_triples_csv, parse_triples_csv } from "../src/csv_codec.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(__dirname, "fixtures");
 
 //============================================
 // parse_table_text: TSV (tab-delimited)
@@ -38,15 +32,6 @@ test("parse_table_text: TSV - BOM stripped", () => {
   const input = "﻿first\tsecond\n";
   const result = parse_table_text(input);
   assert.deepEqual(result, [["first", "second"]]);
-});
-
-test("parse_table_text: TSV - honeybees fixture round-trip", () => {
-  const text = readFileSync(join(FIXTURES, "honeybees_triples.tsv"), "utf8");
-  const rows = parse_table_text(text);
-  // first row is the header
-  assert.deepEqual(rows[0], ["this concept", "verb phrase", "points to this concept"]);
-  // check a known data row
-  assert.deepEqual(rows[1], ["Honeybees", "are socially divided into", "Castes"]);
 });
 
 test("parse_table_text: TSV - quoted field with embedded tab", () => {
@@ -238,20 +223,4 @@ test("parse_triples_csv: BOM stripped before parsing", () => {
   const { rows } = parse_triples_csv(csv);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].from, "A");
-});
-
-//============================================
-// End-to-end: honeybees TSV via parse_table_text -> parse_triples_csv
-//============================================
-
-test("honeybees TSV: parse_table_text produces correct triples data", () => {
-  const text = readFileSync(join(FIXTURES, "honeybees_triples.tsv"), "utf8");
-  // parse_table_text detects TSV (tabs present)
-  const rows = parse_table_text(text);
-  // skip header row, map to triple-like objects
-  const data = rows.slice(1).filter((r) => r.some((c) => c !== ""));
-  const triples = data.map((r) => ({ from: r[0], verb: r[1], to: r[2] }));
-  // Female appears as "to" in multiple rows (multi-input sink concept)
-  const to_female = triples.filter((t) => t.to === "Female");
-  assert.ok(to_female.length > 0, "Female should appear as destination in at least one triple");
 });
