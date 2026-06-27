@@ -16,6 +16,14 @@ The UI includes a two-state light/dark theme toggle; the on-screen concept map a
 selected theme while SVG/PNG exports remain light. The app is deployed on GitHub Pages and runs
 with no server.
 
+## Screenshots
+
+<!-- screenshots:begin (managed by screenshot-docs) -->
+![Dark-mode empty state with example template buttons](docs/screenshots/dark_empty_state.png)
+
+![Dark-mode concept map of the Honeybees example with the triples table](docs/screenshots/dark_concept_map.png)
+<!-- screenshots:end -->
+
 ## Documentation
 
 Getting started:

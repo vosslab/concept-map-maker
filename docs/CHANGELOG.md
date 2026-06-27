@@ -2,6 +2,15 @@
 
 ## 2026-06-27
 
+### Additions and New Features
+
+- Added dark-mode screenshots to `README.md`. New `docs/screenshots/dark_empty_state.png`
+  (the example-template empty state) and `docs/screenshots/dark_concept_map.png` (the Honeybees
+  example map with the triples table), both captured with the UI theme forced to dark via
+  Playwright. Embedded them in a new README "Screenshots" section inside a
+  `screenshots-docs`-managed block so future runs refresh in place. The empty-state shot shows
+  the dark-mode template-button readability fix from 2026-06-26.
+
 ### Fixes and Maintenance
 
 - `check_codebase.sh` `test:node` now passes. The Node unit tests read external fixture
