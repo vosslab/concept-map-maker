@@ -1,5 +1,54 @@
 # Changelog
 
+## 2026-07-02
+
+### Additions and New Features
+
+- Added `devel/clean_build.sh`, the light build cleaner wired to the `npm run clean` target. It
+  wipes build output, tool caches, and test artifacts while keeping `node_modules` (and Rust
+  `target/`) intact, so the next build is ab initio with no reinstall.
+- Updated `devel/dist_clean.sh` (the deep reset) to keep the committed `package-lock.json`, so a
+  distribution-clean checkout still drives a reproducible `npm ci`.
+- Repointed the `clean` npm alias in `package.json` from `./dist_clean.sh` to
+  `./devel/clean_build.sh`.
+
+### Removals and Deprecations
+
+- Removed the root `dist_clean.sh`; both cleaners now live only under `devel/`
+  (`devel/clean_build.sh` light, `devel/dist_clean.sh` deep).
+
+## 2026-07-01
+
+### Fixes and Maintenance
+
+- Added root `dist_clean.sh`, a light cleaner that removes only build output
+  (`dist`, `_site`, `*.tsbuildinfo`, `.eslintcache`) and keeps `node_modules`
+  intact. The `clean` alias in `package.json` already pointed at
+  `./dist_clean.sh`, but the script did not exist at the repo root, so
+  `npm run clean` failed. Modeled on `sports-life-game/dist_clean.sh`, trimmed
+  to this repo's actual build outputs (no `_bundle.js`, which that repo's
+  script sweeps for legacy single-file export artifacts not produced here).
+  `devel/dist_clean.sh` remains the separate deep-reset tool and is unchanged.
+  `./check_codebase.sh` already passed all 5 checks (typecheck, typecheck:lint,
+  lint, format:check, test:node, 192/192 tests) before this fix, so no
+  mechanical format/lint fixes were needed.
+- Declared `playwright` (`>=1.61.1 <2.0.0`, matching the existing `@playwright/test`
+  floor) in `devDependencies`. `tools/html_to_pdf.mjs` and `devel/html_to_pdf.mjs`
+  both `import { chromium } from "playwright"`, but the package was never listed,
+  so any run of the tool (or `build_github_pages.sh`, which calls it) threw
+  `Cannot find package 'playwright'`. It resolved silently as a transitive
+  dependency of `@playwright/test`, so `npm install` needed no new downloads;
+  only `package.json` and `package-lock.json` changed to make the dependency
+  explicit.
+- Declared `@dagrejs/graphlib` (`>=4.0.1 <5.0.0`, matching the installed
+  version and the existing `@dagrejs/dagre` range style) in `devDependencies`.
+  `src/layout_graph.ts` imports `Graph` as a type from `@dagrejs/graphlib`,
+  but the package was never listed. It resolved only because `@dagrejs/dagre`
+  (a declared dependency) transitively pulls in `@dagrejs/graphlib` and npm
+  hoists it, so `tsc --noEmit` passed by accident. A future `@dagrejs/dagre`
+  bump that drops or moves its `@dagrejs/graphlib` dependency would have
+  silently broken the typecheck step of `./check_codebase.sh`.
+
 ## 2026-06-27
 
 ### Additions and New Features
